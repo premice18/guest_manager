@@ -21,7 +21,7 @@ import {
   ArrowRight,
   Sparkles,
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 
 // ===== Variantes d'animation Framer Motion =====
 const fadeUp = {
@@ -63,6 +63,7 @@ const staggerFast = {
 
 // Page d'accueil vitrine pour Guest Manager
 export default function LandingPage() {
+  const prefersReducedMotion = useReducedMotion();
   const router = useRouter();
   const supabase = createClient();
   const [isChecking, setIsChecking] = useState(true);
@@ -131,7 +132,7 @@ export default function LandingPage() {
         <section className="relative overflow-hidden px-4 pb-20 pt-16 sm:px-6 sm:pb-28 sm:pt-24 lg:pt-32">
           {/* Éléments décoratifs flottants */}
           <motion.div
-            animate={{ y: [0, -12, 0] }}
+            animate={prefersReducedMotion ? {} : { y: [0, -12, 0] }}
             transition={{
               repeat: Infinity,
               duration: 4,
@@ -140,7 +141,7 @@ export default function LandingPage() {
             className="pointer-events-none absolute -right-32 -top-32 size-96 rounded-full bg-gold/5 blur-3xl"
           />
           <motion.div
-            animate={{ y: [0, 12, 0] }}
+            animate={prefersReducedMotion ? {} : { y: [0, 12, 0] }}
             transition={{
               repeat: Infinity,
               duration: 5,
@@ -150,15 +151,15 @@ export default function LandingPage() {
           />
 
           <motion.div
-            initial="hidden"
-            animate="visible"
+            initial={prefersReducedMotion ? false : "hidden"}
+            animate={prefersReducedMotion ? {} : "visible"}
             variants={stagger}
             className="relative mx-auto max-w-4xl text-center"
           >
             {/* Badge "Nouveau" avec animation pulse */}
             <motion.div
               variants={fadeUp}
-              animate={{ scale: [1, 1.03, 1] }}
+              animate={prefersReducedMotion ? {} : { scale: [1, 1.03, 1] }}
               transition={{
                 repeat: Infinity,
                 duration: 3,
@@ -204,12 +205,12 @@ export default function LandingPage() {
             >
               <Link href="/register">
                 <motion.div
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
+                  whileHover={prefersReducedMotion ? {} : { scale: 1.03 }}
+                  whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}
                 >
                   <Button
                     size="lg"
-                    className="w-full bg-gold text-white transition-colors hover:bg-gold/90 sm:w-auto"
+                    className="w-full bg-gold text-deep-black transition-colors hover:bg-gold/90 sm:w-auto"
                   >
                     Créer un compte
                     <ArrowRight className="ml-2 size-4" />
@@ -218,8 +219,8 @@ export default function LandingPage() {
               </Link>
               <Link href="/login">
                 <motion.div
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
+                  whileHover={prefersReducedMotion ? {} : { scale: 1.03 }}
+                  whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}
                 >
                   <Button
                     size="lg"
@@ -239,8 +240,8 @@ export default function LandingPage() {
           <div className="mx-auto max-w-6xl">
             {/* Titre de section */}
             <motion.div
-              initial="hidden"
-              whileInView="visible"
+              initial={prefersReducedMotion ? false : "hidden"}
+              whileInView={prefersReducedMotion ? {} : "visible"}
               viewport={{ once: true }}
               variants={stagger}
               className="mb-12 text-center sm:mb-16"
@@ -262,8 +263,8 @@ export default function LandingPage() {
 
             {/* Grille des cartes fonctionnalités avec stagger */}
             <motion.div
-              initial="hidden"
-              whileInView="visible"
+              initial={prefersReducedMotion ? false : "hidden"}
+              whileInView={prefersReducedMotion ? {} : "visible"}
               viewport={{ once: true, margin: "-50px" }}
               variants={staggerFast}
               className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4"
@@ -271,8 +272,8 @@ export default function LandingPage() {
               {/* Carte 1 : Gestion des invités */}
               <motion.div
                 variants={fadeUp}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={prefersReducedMotion ? {} : { scale: 1.02 }}
+                whileTap={prefersReducedMotion ? {} : { scale: 0.98 }}
               >
                 <Card className="group border-border/60 bg-white shadow-sm transition-all duration-300 hover:shadow-md hover:border-l-2 hover:border-l-gold">
                   <CardHeader>
@@ -293,8 +294,8 @@ export default function LandingPage() {
               {/* Carte 2 : Plan de salle intuitif */}
               <motion.div
                 variants={fadeUp}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={prefersReducedMotion ? {} : { scale: 1.02 }}
+                whileTap={prefersReducedMotion ? {} : { scale: 0.98 }}
               >
                 <Card className="group border-border/60 bg-white shadow-sm transition-all duration-300 hover:shadow-md hover:border-l-2 hover:border-l-gold">
                   <CardHeader>
@@ -315,8 +316,8 @@ export default function LandingPage() {
               {/* Carte 3 : Check-in temps réel */}
               <motion.div
                 variants={fadeUp}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={prefersReducedMotion ? {} : { scale: 1.02 }}
+                whileTap={prefersReducedMotion ? {} : { scale: 0.98 }}
               >
                 <Card className="group border-border/60 bg-white shadow-sm transition-all duration-300 hover:shadow-md hover:border-l-2 hover:border-l-gold">
                   <CardHeader>
@@ -337,8 +338,8 @@ export default function LandingPage() {
               {/* Carte 4 : Exports professionnels */}
               <motion.div
                 variants={fadeUp}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={prefersReducedMotion ? {} : { scale: 1.02 }}
+                whileTap={prefersReducedMotion ? {} : { scale: 0.98 }}
               >
                 <Card className="group border-border/60 bg-white shadow-sm transition-all duration-300 hover:shadow-md hover:border-l-2 hover:border-l-gold">
                   <CardHeader>
@@ -362,8 +363,8 @@ export default function LandingPage() {
         {/* ===== Section Call-to-Action finale ===== */}
         <section className="bg-deep-black px-4 py-16 sm:py-24">
           <motion.div
-            initial="hidden"
-            whileInView="visible"
+            initial={prefersReducedMotion ? false : "hidden"}
+            whileInView={prefersReducedMotion ? {} : "visible"}
             viewport={{ once: true }}
             variants={stagger}
             className="mx-auto max-w-3xl text-center"
@@ -387,12 +388,12 @@ export default function LandingPage() {
             >
               <Link href="/register">
                 <motion.div
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
+                  whileHover={prefersReducedMotion ? {} : { scale: 1.03 }}
+                  whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}
                 >
                   <Button
                     size="lg"
-                    className="w-full bg-gold text-white transition-colors hover:bg-gold/90 sm:w-auto"
+                    className="w-full bg-gold text-deep-black transition-colors hover:bg-gold/90 sm:w-auto"
                   >
                     Commencer gratuitement
                     <ArrowRight className="ml-2 size-4" />
@@ -401,8 +402,8 @@ export default function LandingPage() {
               </Link>
               <Link href="/login">
                 <motion.div
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
+                  whileHover={prefersReducedMotion ? {} : { scale: 1.03 }}
+                  whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}
                 >
                   <Button
                     size="lg"

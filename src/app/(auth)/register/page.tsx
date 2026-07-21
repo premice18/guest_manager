@@ -20,7 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 
 // ===== Variantes d'animation Framer Motion =====
@@ -75,6 +75,7 @@ const registerSchema = z
 type RegisterForm = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
+  const prefersReducedMotion = useReducedMotion();
   const router = useRouter();
   const supabase = createClient();
   const [showPassword, setShowPassword] = useState(false);
@@ -128,8 +129,8 @@ export default function RegisterPage() {
 
       {/* Carte d'inscription avec animation d'entrée */}
       <motion.div
-        initial="hidden"
-        animate="visible"
+        initial={prefersReducedMotion ? false : "hidden"}
+        animate={prefersReducedMotion ? {} : "visible"}
         variants={cardEntrance}
         className="w-full max-w-md"
       >
@@ -160,8 +161,8 @@ export default function RegisterPage() {
               <CardContent className="space-y-5">
                 <motion.div
                   variants={stagger}
-                  initial="hidden"
-                  animate="visible"
+                  initial={prefersReducedMotion ? false : "hidden"}
+                  animate={prefersReducedMotion ? {} : "visible"}
                   className="space-y-5"
                 >
                   {/* Champ Email */}
@@ -179,6 +180,7 @@ export default function RegisterPage() {
                         <motion.p
                           key="email-error"
                           {...errorAnimation}
+                          transition={prefersReducedMotion ? { duration: 0 } : errorAnimation.transition}
                           className="text-sm text-destructive"
                         >
                           {errors.email.message}
@@ -222,6 +224,7 @@ export default function RegisterPage() {
                         <motion.p
                           key="password-error"
                           {...errorAnimation}
+                          transition={prefersReducedMotion ? { duration: 0 } : errorAnimation.transition}
                           className="text-sm text-destructive"
                         >
                           {errors.password.message}
@@ -274,6 +277,7 @@ export default function RegisterPage() {
                         <motion.p
                           key="confirm-password-error"
                           {...errorAnimation}
+                          transition={prefersReducedMotion ? { duration: 0 } : errorAnimation.transition}
                           className="text-sm text-destructive"
                         >
                           {errors.confirmPassword.message}
@@ -285,13 +289,13 @@ export default function RegisterPage() {
               </CardContent>
               <CardFooter className="flex flex-col gap-3">
                 <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  whileHover={prefersReducedMotion ? {} : { scale: 1.02 }}
+                  whileTap={prefersReducedMotion ? {} : { scale: 0.98 }}
                   className="w-full"
                 >
                   <Button
                     type="submit"
-                    className="w-full bg-gold text-white transition-colors hover:bg-gold/90"
+                    className="w-full bg-gold text-deep-black transition-colors hover:bg-gold/90"
                     disabled={isSubmitting}
                   >
                     {isSubmitting

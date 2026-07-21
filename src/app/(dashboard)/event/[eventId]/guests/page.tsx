@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database.types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Card,
@@ -44,7 +45,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 type Guest = Database["public"]["Tables"]["guests"]["Row"];
 type Table = Database["public"]["Tables"]["tables"]["Row"];
@@ -93,6 +94,7 @@ export default function GuestsPage({
 }: {
   params: Promise<{ eventId: string }>;
 }) {
+  const prefersReducedMotion = useReducedMotion();
   const router = useRouter();
   const [eventId, setEventId] = useState("");
   const supabase = createClient();
@@ -481,8 +483,8 @@ export default function GuestsPage({
       {/* En-tête */}
       <motion.div
         variants={fadeInUp}
-        initial="hidden"
-        animate="visible"
+        initial={prefersReducedMotion ? false : "hidden"}
+        animate={prefersReducedMotion ? {} : "visible"}
         className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
@@ -501,19 +503,19 @@ export default function GuestsPage({
             className="hidden"
             onChange={handleFileSelect}
           />
-          <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+          <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
             <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
               <Upload className="mr-1.5 size-4" />
               Importer CSV
             </Button>
           </motion.div>
-          <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+          <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
             <Button variant="outline" size="sm" onClick={exportCSV}>
               <Download className="mr-1.5 size-4" />
               Exporter CSV
             </Button>
           </motion.div>
-          <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+          <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
             <Button
               size="sm"
               variant="outline"
@@ -524,7 +526,7 @@ export default function GuestsPage({
               Ajout rapide
             </Button>
           </motion.div>
-          <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+          <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
             <Button size="sm" onClick={() => openGuestModal()}>
               <Plus className="mr-1.5 size-4" />
               Ajouter un invité
@@ -536,8 +538,8 @@ export default function GuestsPage({
       {/* Filtres */}
       <motion.div
         variants={fadeInUp}
-        initial="hidden"
-        animate="visible"
+        initial={prefersReducedMotion ? false : "hidden"}
+        animate={prefersReducedMotion ? {} : "visible"}
       >
         <Card className="mb-6">
           <CardContent className="pt-4">
@@ -590,22 +592,22 @@ export default function GuestsPage({
       <AnimatePresence>
         {selectedGuestIds.size > 0 && (
           <motion.div
-            initial={{ opacity: 0, y: -12, height: 0 }}
-            animate={{ opacity: 1, y: 0, height: "auto" }}
-            exit={{ opacity: 0, y: -12, height: 0 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, y: -12, height: 0 }}
+            animate={prefersReducedMotion ? {} : { opacity: 1, y: 0, height: "auto" }}
+            exit={prefersReducedMotion ? {} : { opacity: 0, y: -12, height: 0 }}
             transition={{ type: "spring" as const, stiffness: 260, damping: 22 }}
             className="mb-4 overflow-hidden"
           >
             <div className="flex items-center gap-3 rounded-lg bg-gold/10 px-4 py-2 text-sm">
               <motion.span
                 key={selectedGuestIds.size}
-                initial={{ scale: 1.3 }}
-                animate={{ scale: 1 }}
+                initial={prefersReducedMotion ? false : { scale: 1.3 }}
+                animate={prefersReducedMotion ? {} : { scale: 1 }}
                 className="font-medium"
               >
                 {selectedGuestIds.size} sélectionné(s)
               </motion.span>
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+              <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                 <Button
                   size="sm"
                   variant="outline"
@@ -617,7 +619,7 @@ export default function GuestsPage({
                   Créer un groupe
                 </Button>
               </motion.div>
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+              <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -636,10 +638,11 @@ export default function GuestsPage({
       {pageGuests.length > 0 ? (
         <motion.div
           variants={tableContainerVariants}
-          initial="hidden"
-          animate="visible"
+          initial={prefersReducedMotion ? false : "hidden"}
+          animate={prefersReducedMotion ? {} : "visible"}
           className="overflow-x-auto rounded-xl border border-border bg-white"
         >
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/50">
@@ -735,22 +738,24 @@ export default function GuestsPage({
                   </td>
                   <td className="px-3 py-2.5 text-right">
                     <div className="flex justify-end gap-0.5">
-                      <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                      <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.1 }} whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}>
                         <Button
                           variant="ghost"
                           size="icon"
                           className="size-7"
+                          aria-label="Modifier"
                           onClick={() => openGuestModal(guest)}
                         >
                           <Pencil className="size-3.5" />
                         </Button>
                       </motion.div>
                       {guest.group_id && (
-                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                        <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.1 }} whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}>
                           <Button
                             variant="ghost"
                             size="icon"
                             className="size-7"
+                            aria-label="Retirer du groupe"
                             onClick={() => removeFromGroup(guest)}
                             title="Retirer du groupe"
                           >
@@ -758,11 +763,12 @@ export default function GuestsPage({
                           </Button>
                         </motion.div>
                       )}
-                      <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                      <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.1 }} whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}>
                         <Button
                           variant="ghost"
                           size="icon"
                           className="size-7 text-destructive"
+                          aria-label="Supprimer"
                           onClick={() => deleteGuest(guest)}
                         >
                           <Trash2 className="size-3.5" />
@@ -774,19 +780,20 @@ export default function GuestsPage({
               ))}
             </tbody>
           </table>
+          </div>
 
           {/* Pagination */}
           {totalPages > 1 && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+              initial={prefersReducedMotion ? false : { opacity: 0 }}
+              animate={prefersReducedMotion ? {} : { opacity: 1 }}
               className="flex items-center justify-between border-t border-border px-4 py-3"
             >
               <p className="text-sm text-muted-foreground">
                 {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} sur {filtered.length}
               </p>
               <div className="flex gap-1">
-                <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                   <Button
                     variant="outline"
                     size="sm"
@@ -797,12 +804,12 @@ export default function GuestsPage({
                     Précédent
                   </Button>
                 </motion.div>
-                <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                   <Button
                     size="sm"
                     disabled={page >= totalPages - 1}
                     onClick={() => setPage(page + 1)}
-                    className="bg-gold text-white hover:bg-gold/90 focus-visible:ring-2 focus-visible:ring-gold disabled:bg-muted disabled:text-muted-foreground"
+                    className="bg-gold text-deep-black hover:bg-gold/90 focus-visible:ring-2 focus-visible:ring-gold disabled:bg-muted disabled:text-muted-foreground"
                   >
                     Suivant
                   </Button>
@@ -813,13 +820,13 @@ export default function GuestsPage({
         </motion.div>
       ) : (
         <motion.div
-          initial={{ opacity: 0, scale: 0.97 }}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.97 }}
+          animate={prefersReducedMotion ? {} : { opacity: 1, scale: 1 }}
           transition={{ type: "spring" as const, stiffness: 200, damping: 24 }}
           className="rounded-xl border-2 border-dashed border-border bg-white p-12 text-center"
         >
           <motion.div
-            animate={{ y: [0, -8, 0] }}
+            animate={prefersReducedMotion ? {} : { y: [0, -8, 0] }}
             transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
           >
             <Users className="mx-auto mb-4 size-12 text-muted-foreground/40" />
@@ -836,8 +843,8 @@ export default function GuestsPage({
       <Dialog open={guestModalOpen} onOpenChange={setGuestModalOpen}>
         <DialogContent>
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
+initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, y: 10 }}
+            animate={prefersReducedMotion ? {} : { opacity: 1, scale: 1, y: 0 }}
             transition={{ type: "spring" as const, stiffness: 260, damping: 24 }}
           >
             <DialogHeader>
@@ -903,23 +910,21 @@ export default function GuestsPage({
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="guest-dietary">Notes alimentaires</Label>
-                <textarea
+                <Textarea
                   id="guest-dietary"
                   rows={2}
                   value={formDietary}
                   onChange={(e) => setFormDietary(e.target.value)}
-                  className="h-auto w-full min-w-0 rounded-lg border border-input bg-transparent px-3 py-2 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-gold md:text-sm"
                   placeholder="Allergies, régime..."
                 />
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="guest-notes">Notes diverses</Label>
-                <textarea
+                <Textarea
                   id="guest-notes"
                   rows={2}
                   value={formNotes}
                   onChange={(e) => setFormNotes(e.target.value)}
-                  className="h-auto w-full min-w-0 rounded-lg border border-input bg-transparent px-3 py-2 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-gold md:text-sm"
                 />
               </div>
               <div className="sm:col-span-2">
@@ -949,14 +954,14 @@ export default function GuestsPage({
             </div>
 
             <DialogFooter>
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+              <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                 <Button variant="outline" onClick={() => setGuestModalOpen(false)}>Annuler</Button>
               </motion.div>
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+              <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                 <Button
                   onClick={saveGuest}
                   disabled={saving || !formFirstName.trim() || !formLastName.trim()}
-                  className="bg-gold text-white hover:bg-gold/90"
+                  className="bg-gold text-deep-black hover:bg-gold/90"
                 >
                   {saving ? "Sauvegarde..." : editingGuest ? "Enregistrer" : "Ajouter"}
                 </Button>
@@ -970,8 +975,8 @@ export default function GuestsPage({
       <Dialog open={groupModalOpen} onOpenChange={setGroupModalOpen}>
         <DialogContent>
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
+initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, y: 10 }}
+            animate={prefersReducedMotion ? {} : { opacity: 1, scale: 1, y: 0 }}
             transition={{ type: "spring" as const, stiffness: 260, damping: 24 }}
           >
             <DialogHeader>
@@ -991,11 +996,11 @@ export default function GuestsPage({
               />
             </div>
             <DialogFooter>
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+              <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                 <Button variant="outline" onClick={() => setGroupModalOpen(false)}>Annuler</Button>
               </motion.div>
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                <Button onClick={createGroup} className="bg-gold text-white hover:bg-gold/90">
+              <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
+                <Button onClick={createGroup} className="bg-gold text-deep-black hover:bg-gold/90">
                   Créer le groupe
                 </Button>
               </motion.div>
@@ -1018,8 +1023,8 @@ export default function GuestsPage({
       <Dialog open={importModalOpen} onOpenChange={setImportModalOpen}>
         <DialogContent>
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
+initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, y: 10 }}
+            animate={prefersReducedMotion ? {} : { opacity: 1, scale: 1, y: 0 }}
             transition={{ type: "spring" as const, stiffness: 260, damping: 24 }}
           >
             <DialogHeader>
@@ -1060,14 +1065,14 @@ export default function GuestsPage({
             )}
 
             <DialogFooter>
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+              <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                 <Button variant="outline" onClick={() => setImportModalOpen(false)}>Annuler</Button>
               </motion.div>
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+              <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                 <Button
                   onClick={executeImport}
                   disabled={importing || !csvData.length}
-                  className="bg-gold text-white hover:bg-gold/90"
+                  className="bg-gold text-deep-black hover:bg-gold/90"
                 >
                   {importing ? "Import..." : `Importer ${csvData.length} lignes`}
                 </Button>
@@ -1081,9 +1086,9 @@ export default function GuestsPage({
       <div className="fixed bottom-6 right-6 z-50 sm:hidden">
         <motion.button
           onClick={() => openGuestModal()}
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          className="flex size-14 items-center justify-center rounded-full bg-gold text-white shadow-lg shadow-gold/30"
+          whileHover={prefersReducedMotion ? {} : { scale: 1.1 }}
+          whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}
+          className="flex size-14 items-center justify-center rounded-full bg-gold text-deep-black shadow-lg shadow-gold/30"
           aria-label="Ajouter un invité"
         >
           <Plus className="size-7" />
@@ -1092,3 +1097,4 @@ export default function GuestsPage({
     </main>
   );
 }
+

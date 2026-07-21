@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database.types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -27,7 +28,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 type Table = Database["public"]["Tables"]["tables"]["Row"];
 
@@ -68,6 +69,7 @@ export default function BulkAddModal({
   guestsCount,
   onSuccess,
 }: BulkAddModalProps) {
+  const prefersReducedMotion = useReducedMotion();
   const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -382,8 +384,8 @@ export default function BulkAddModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-4xl">
         <motion.div
-          initial={{ opacity: 0, scale: 0.97, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.97, y: 10 }}
+          animate={prefersReducedMotion ? {} : { opacity: 1, scale: 1, y: 0 }}
           transition={{ type: "spring" as const, stiffness: 260, damping: 24 }}
         >
           <DialogHeader>
@@ -399,7 +401,7 @@ export default function BulkAddModal({
 
           {/* Boutons d'action supérieurs */}
           <div className="mb-4 flex flex-wrap items-center gap-2">
-            <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+            <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
               <Button
                 size="sm"
                 variant="outline"
@@ -410,7 +412,7 @@ export default function BulkAddModal({
                 Singleton
               </Button>
             </motion.div>
-            <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+            <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
               <Button
                 size="sm"
                 variant="outline"
@@ -421,7 +423,7 @@ export default function BulkAddModal({
                 Couple
               </Button>
             </motion.div>
-            <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+            <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
               <Button
                 size="sm"
                 variant="outline"
@@ -438,9 +440,9 @@ export default function BulkAddModal({
           <AnimatePresence>
             {showCsv && (
               <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
+                initial={prefersReducedMotion ? false : { opacity: 0, height: 0 }}
+                animate={prefersReducedMotion ? {} : { opacity: 1, height: "auto" }}
+                exit={prefersReducedMotion ? {} : { opacity: 0, height: 0 }}
                 transition={{ duration: 0.2 }}
                 className="mb-4 overflow-hidden"
               >
@@ -448,12 +450,12 @@ export default function BulkAddModal({
                   <p className="mb-2 text-sm font-medium">
                     Collez vos données CSV (en-têtes : prenom,nom,type,table)
                   </p>
-                  <textarea
+                  <Textarea
                     rows={4}
                     value={csvText}
                     onChange={(e) => setCsvText(e.target.value)}
                     placeholder={`prenom,nom,type,table\nJean,Dupont,singleton,Table 1\nMarie,Martin,couple,Table 2`}
-                    className="mb-3 w-full rounded-lg border border-input bg-white px-3 py-2 text-sm focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-gold"
+                    className="mb-3 bg-white"
                   />
                   <input
                     ref={fileInputRef}
@@ -463,14 +465,14 @@ export default function BulkAddModal({
                     onChange={handleFileUpload}
                   />
                   <div className="flex gap-2">
-                    <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                    <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                       <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>
                         <Upload className="mr-1 size-3.5" />
                         Fichier
                       </Button>
                     </motion.div>
-                    <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                      <Button size="sm" onClick={importCsvText} className="bg-gold text-white hover:bg-gold/90">
+                    <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
+                      <Button size="sm" onClick={importCsvText} className="bg-gold text-deep-black hover:bg-gold/90">
                         Importer
                       </Button>
                     </motion.div>
@@ -502,9 +504,9 @@ export default function BulkAddModal({
                   return (
                     <motion.tr
                       key={row.id}
-                      initial={{ opacity: 0, y: -8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, x: 20 }}
+                      initial={prefersReducedMotion ? false : { opacity: 0, y: -8 }}
+                      animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
+                      exit={prefersReducedMotion ? {} : { opacity: 0, x: 20 }}
                       transition={{ type: "spring" as const, stiffness: 260, damping: 24 }}
                       className={cn(
                         "border-b border-border transition-colors",
@@ -566,8 +568,8 @@ export default function BulkAddModal({
                       <td className="px-2 py-1.5">
                         <div className="flex justify-center gap-0.5">
                           <motion.button
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
+                            whileHover={prefersReducedMotion ? {} : { scale: 1.1 }}
+                            whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}
                             onClick={() => duplicateRow(row)}
                             className="flex size-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                             title="Dupliquer"
@@ -575,8 +577,8 @@ export default function BulkAddModal({
                             <Copy className="size-3" />
                           </motion.button>
                           <motion.button
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
+                            whileHover={prefersReducedMotion ? {} : { scale: 1.1 }}
+                            whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}
                             onClick={() => removeRow(row.id)}
                             className="flex size-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500"
                             title="Supprimer"
@@ -612,16 +614,16 @@ export default function BulkAddModal({
           </div>
 
           <DialogFooter className="mt-4 border-t border-border pt-4">
-            <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+            <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
               <Button variant="outline" onClick={() => handleOpenChange(false)}>
                 Annuler
               </Button>
             </motion.div>
-            <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+            <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
               <Button
                 onClick={saveBulk}
                 disabled={saving}
-                className="bg-gold text-white hover:bg-gold/90"
+                className="bg-gold text-deep-black hover:bg-gold/90"
               >
                 {saving ? "Ajout en cours..." : `Ajouter les invités`}
               </Button>
@@ -632,3 +634,4 @@ export default function BulkAddModal({
     </Dialog>
   );
 }
+
