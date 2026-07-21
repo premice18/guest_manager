@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useCallback, useMemo, useRef, use } from "react";
 import Link from "next/link";
+import { nanoid } from "nanoid";
 import { createClient } from "@/lib/supabase/client";
 import { useReceptionStore } from "@/lib/store/reception-store";
 import { useRealtimeGuests } from "@/lib/hooks/use-realtime";
@@ -26,11 +26,9 @@ import {
   Users,
   UserPlus,
   Check,
-  X,
   ArrowLeft,
   Clock,
   Baby,
-  CircleUser,
   AlertTriangle,
   ChevronDown,
   ChevronUp,
@@ -40,7 +38,6 @@ import {
   PartyPopper,
   UserCheck,
   Timer,
-  GripVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -48,7 +45,11 @@ import { motion, AnimatePresence } from "framer-motion";
 type Guest = Database["public"]["Tables"]["guests"]["Row"];
 type Table = Database["public"]["Tables"]["tables"]["Row"];
 
-const AGE_LABELS: Record<string, string> = { adult: "Adulte", child: "Enfant", baby: "Bébé" };
+const AGE_LABELS: Record<string, string> = {
+  adult: "Adulte",
+  child: "Enfant",
+  baby: "Bébé",
+};
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
 function stringToColor(str: string) {
@@ -87,17 +88,15 @@ const itemVariants = {
   },
 };
 
-// Page de réception : check-in mobile/tablette avec temps réel
 export default function ReceptionPage({
   params,
 }: {
   params: Promise<{ eventId: string }>;
 }) {
-  const router = useRouter();
+  const { eventId } = use(params);
   const supabase = createClient();
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const [eventId, setEventId] = useState<string>("");
   const [eventName, setEventName] = useState("");
   const [tables, setTables] = useState<Table[]>([]);
   const [loading, setLoading] = useState(true);
@@ -119,47 +118,68 @@ export default function ReceptionPage({
   const [viewMode, setViewMode] = useState<"list" | "groups">("list");
   const [statsOpen, setStatsOpen] = useState(false);
 
-  // Modal walk-in
   const [walkinModal, setWalkinModal] = useState(false);
   const [wiFirstName, setWiFirstName] = useState("");
   const [wiLastName, setWiLastName] = useState("");
   const [wiCategory, setWiCategory] = useState("Invité imprévu");
-  const [wiAgeType, setWiAgeType] = useState<"adult" | "child" | "baby">("adult");
+  const [wiAgeType, setWiAgeType] = useState<"adult" | "child" | "baby">(
+    "adult",
+  );
   const [wiTableId, setWiTableId] = useState("none");
   const [wiNotes, setWiNotes] = useState("");
   const [wiSaving, setWiSaving] = useState(false);
 
-  // Barre de progression de check-in
-  const progressPercent = totalGuests > 0 ? Math.round((presentCount / totalGuests) * 100) : 0;
+  const progressPercent =
+    totalGuests > 0 ? Math.round((presentCount / totalGuests) * 100) : 0;
 
-  const init = useCallback(async () => {
-    const id = (await params).eventId;
-    setEventId(id);
+  const enrichGuests = useCallback(
+    async (guestData: unknown) => {
+      const raw = guestData as Array<Guest & { tables?: { name: string } | null }>;
+      const enriched = raw.map(
+        ({ tables, ...g }) => ({ ...g, table_name: tables?.name ?? null }) as Guest,
+      );
+      setGuests(enriched);
+    },
+    [setGuests],
+  );
 
-    const { data: ev } = await supabase.from("events").select("name").eq("id", id).single();
-    if (ev) setEventName(ev.name);
-
-    const { data: tbls } = await supabase.from("tables").select("*").eq("event_id", id).order("name");
-    setTables(tbls ?? []);
-
+  const refreshGuests = useCallback(async () => {
     const { data: gsts } = await supabase
       .from("guests")
       .select("*, tables(name)")
-      .eq("event_id", id)
+      .eq("event_id", eventId)
       .order("last_name")
       .order("first_name");
-
-    const enriched = (gsts ?? []).map((g: any) => ({
-      ...g,
-      table_name: g.tables?.name ?? null,
-    }));
-    setGuests(enriched);
-    setLoading(false);
-  }, [params, supabase, setGuests]);
+    if (gsts) await enrichGuests(gsts);
+  }, [eventId, supabase, enrichGuests]);
 
   useEffect(() => {
-    init();
-  }, [init]);
+    (async () => {
+      const { data: ev } = await supabase
+        .from("events")
+        .select("name")
+        .eq("id", eventId)
+        .single();
+      if (ev) setEventName(ev.name);
+
+      const { data: tbls } = await supabase
+        .from("tables")
+        .select("*")
+        .eq("event_id", eventId)
+        .order("name");
+      setTables(tbls ?? []);
+
+      const { data: gsts } = await supabase
+        .from("guests")
+        .select("*, tables(name)")
+        .eq("event_id", eventId)
+        .order("last_name")
+        .order("first_name");
+
+      if (gsts) await enrichGuests(gsts);
+      setLoading(false);
+    })();
+  }, [eventId, supabase, enrichGuests]);
 
   useRealtimeGuests(eventId);
 
@@ -169,10 +189,15 @@ export default function ReceptionPage({
     const all = Object.values(guestsMap) as EnrichedGuest[];
     return all.filter((g) => {
       const q = search.toLowerCase();
-      if (q && !`${g.first_name} ${g.last_name} ${g.group_name ?? ""} ${g.table_name ?? ""}`
-        .toLowerCase().includes(q))
+      if (
+        q &&
+        !`${g.first_name} ${g.last_name} ${g.group_name ?? ""} ${g.table_name ?? ""}`
+          .toLowerCase()
+          .includes(q)
+      )
         return false;
-      if (filterLetter && (g.last_name[0] ?? "").toUpperCase() !== filterLetter) return false;
+      if (filterLetter && (g.last_name[0] ?? "").toUpperCase() !== filterLetter)
+        return false;
       if (filterTable !== "all") {
         if (filterTable === "none") {
           if (g.table_id) return false;
@@ -187,13 +212,19 @@ export default function ReceptionPage({
   }, [guestsMap, search, filterLetter, filterTable, filterStatus]);
 
   const groupedView = useMemo(() => {
-    const groups: Record<string, { groupName: string; members: EnrichedGuest[] }> = {};
+    const groups: Record<
+      string,
+      { groupName: string; members: EnrichedGuest[] }
+    > = {};
     const solos: EnrichedGuest[] = [];
     const all = Object.values(guestsMap) as EnrichedGuest[];
     for (const g of all) {
       if (g.group_id) {
         if (!groups[g.group_id]) {
-          groups[g.group_id] = { groupName: g.group_name ?? "Groupe", members: [] };
+          groups[g.group_id] = {
+            groupName: g.group_name ?? "Groupe",
+            members: [],
+          };
         }
         groups[g.group_id].members.push(g);
       } else {
@@ -214,7 +245,7 @@ export default function ReceptionPage({
 
     if (!isOnline) {
       addPendingAction({
-        id: crypto.randomUUID(),
+        id: nanoid(),
         guestId: guest.id,
         type: newStatus ? "checkin" : "uncheckin",
         timestamp,
@@ -250,7 +281,7 @@ export default function ReceptionPage({
   const checkinGroup = async (groupId: string) => {
     const timestamp = new Date().toISOString();
     const members = (Object.values(guestsMap) as Guest[]).filter(
-      (g) => g.group_id === groupId
+      (g) => g.group_id === groupId,
     );
 
     for (const m of members) {
@@ -260,7 +291,7 @@ export default function ReceptionPage({
     if (!isOnline) {
       for (const m of members) {
         addPendingAction({
-          id: crypto.randomUUID(),
+          id: nanoid(),
           guestId: m.id,
           type: "checkin",
           timestamp,
@@ -277,7 +308,7 @@ export default function ReceptionPage({
 
       if (error) {
         toast.error(error.message);
-        init();
+        await refreshGuests();
       }
     } catch {
       toast.error("Erreur lors du check-in groupé");
@@ -312,7 +343,9 @@ export default function ReceptionPage({
         return;
       }
 
-      const tableName = (data as any)?.tables?.name ?? "non placé";
+      const tableName =
+        (data as unknown as { tables?: { name: string } | null })?.tables
+          ?.name ?? "non placé";
       toast.success(`${data.first_name} ${data.last_name} → ${tableName}`);
       setWalkinModal(false);
       setWiFirstName("");
@@ -322,7 +355,7 @@ export default function ReceptionPage({
       setWiTableId("none");
       setWiNotes("");
 
-      init();
+      await refreshGuests();
     } catch {
       toast.error("Erreur lors de l'ajout");
     } finally {
@@ -412,16 +445,24 @@ export default function ReceptionPage({
 
   // Stats enrichies
   const childrenCount = useMemo(
-    () => (Object.values(guestsMap) as Guest[]).filter((g) => g.age_type === "child" || g.age_type === "baby").length,
-    [guestsMap]
+    () =>
+      (Object.values(guestsMap) as Guest[]).filter(
+        (g) => g.age_type === "child" || g.age_type === "baby",
+      ).length,
+    [guestsMap],
   );
   const presentChildren = useMemo(
-    () => (Object.values(guestsMap) as Guest[]).filter((g) => g.is_present && (g.age_type === "child" || g.age_type === "baby")).length,
-    [guestsMap]
+    () =>
+      (Object.values(guestsMap) as Guest[]).filter(
+        (g) =>
+          g.is_present && (g.age_type === "child" || g.age_type === "baby"),
+      ).length,
+    [guestsMap],
   );
   const unassignedCount = useMemo(
-    () => (Object.values(guestsMap) as Guest[]).filter((g) => !g.table_id).length,
-    [guestsMap]
+    () =>
+      (Object.values(guestsMap) as Guest[]).filter((g) => !g.table_id).length,
+    [guestsMap],
   );
 
   // Badge pour l'indicateur de progression
@@ -439,7 +480,9 @@ export default function ReceptionPage({
           transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
           className="size-12 rounded-full border-4 border-gold/30 border-t-gold"
         />
-        <p className="text-sm text-muted-foreground">Chargement de la réception...</p>
+        <p className="text-sm text-muted-foreground">
+          Chargement de la réception...
+        </p>
       </div>
     );
   }
@@ -465,14 +508,20 @@ export default function ReceptionPage({
               </Link>
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-base font-semibold sm:text-lg">{eventName || "Réception"}</h1>
+                  <h1 className="text-base font-semibold sm:text-lg">
+                    {eventName || "Réception"}
+                  </h1>
                   {/* Indicateur de statut en temps réel */}
                   <motion.span
                     animate={{ scale: [1, 1.3, 1] }}
-                    transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                    transition={{
+                      repeat: Infinity,
+                      duration: 2,
+                      ease: "easeInOut",
+                    }}
                     className={cn(
                       "inline-block size-2 rounded-full",
-                      isOnline ? "bg-green-500" : "bg-red-500"
+                      isOnline ? "bg-green-500" : "bg-red-500",
                     )}
                   />
                 </div>
@@ -521,12 +570,22 @@ export default function ReceptionPage({
           </div>
 
           {/* Barre de progression */}
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100} aria-label={`${progressPercent}% des invités présents`}>
+          <div
+            className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-valuenow={progressPercent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`${progressPercent}% des invités présents`}
+          >
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${progressPercent}%` }}
               transition={{ duration: 0.5, ease: "easeOut" }}
-              className={cn("h-full rounded-full transition-colors", getProgressColor())}
+              className={cn(
+                "h-full rounded-full transition-colors",
+                getProgressColor(),
+              )}
             />
           </div>
         </div>
@@ -556,13 +615,19 @@ export default function ReceptionPage({
           {/* Filtres */}
           <div className="flex flex-wrap items-center gap-2">
             {/* Filtre alphabétique */}
-            <div className="flex gap-0.5 overflow-x-auto pb-1" role="group" aria-label="Filtre alphabétique">
+            <div
+              className="flex gap-0.5 overflow-x-auto pb-1"
+              role="group"
+              aria-label="Filtre alphabétique"
+            >
               <motion.button
                 whileTap={{ scale: 0.9 }}
                 onClick={() => setFilterLetter("")}
                 className={cn(
                   "flex size-8 shrink-0 items-center justify-center rounded-md text-xs font-medium transition-colors",
-                  !filterLetter ? "bg-gold text-white" : "bg-white text-muted-foreground hover:bg-muted"
+                  !filterLetter
+                    ? "bg-gold text-white"
+                    : "bg-white text-muted-foreground hover:bg-muted",
                 )}
                 aria-label="Toutes les lettres"
               >
@@ -572,12 +637,14 @@ export default function ReceptionPage({
                 <motion.button
                   key={letter}
                   whileTap={{ scale: 0.9 }}
-                  onClick={() => setFilterLetter(letter === filterLetter ? "" : letter)}
+                  onClick={() =>
+                    setFilterLetter(letter === filterLetter ? "" : letter)
+                  }
                   className={cn(
                     "flex size-8 shrink-0 items-center justify-center rounded-md text-xs font-medium transition-colors",
                     filterLetter === letter
                       ? "bg-gold text-white"
-                      : "bg-white text-muted-foreground hover:bg-muted"
+                      : "bg-white text-muted-foreground hover:bg-muted",
                   )}
                   aria-label={`Lettre ${letter}`}
                   aria-pressed={filterLetter === letter}
@@ -615,12 +682,17 @@ export default function ReceptionPage({
               <option value="absent">Absents</option>
             </select>
 
-            <motion.div whileTap={{ scale: 0.95 }} className="inline-flex overflow-hidden rounded-lg border border-input bg-white">
+            <motion.div
+              whileTap={{ scale: 0.95 }}
+              className="inline-flex overflow-hidden rounded-lg border border-input bg-white"
+            >
               <button
                 onClick={() => setViewMode("list")}
                 className={cn(
                   "flex items-center gap-1 px-3 py-2 text-xs font-medium transition-colors",
-                  viewMode === "list" ? "bg-gold text-white" : "text-muted-foreground hover:text-foreground"
+                  viewMode === "list"
+                    ? "bg-gold text-white"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
                 aria-label="Vue liste"
                 aria-pressed={viewMode === "list"}
@@ -632,7 +704,9 @@ export default function ReceptionPage({
                 onClick={() => setViewMode("groups")}
                 className={cn(
                   "flex items-center gap-1 px-3 py-2 text-xs font-medium transition-colors",
-                  viewMode === "groups" ? "bg-gold text-white" : "text-muted-foreground hover:text-foreground"
+                  viewMode === "groups"
+                    ? "bg-gold text-white"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
                 aria-label="Vue groupes"
                 aria-pressed={viewMode === "groups"}
@@ -651,14 +725,24 @@ export default function ReceptionPage({
             >
               <LayoutGrid className="size-4" />
               Stats
-              {statsOpen ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+              {statsOpen ? (
+                <ChevronUp className="size-3.5" />
+              ) : (
+                <ChevronDown className="size-3.5" />
+              )}
             </button>
 
             {/* Indication des raccourcis */}
             <span className="hidden items-center gap-1 text-xs text-muted-foreground sm:flex">
               <Keyboard className="size-3" />
-              <kbd className="rounded border bg-muted/50 px-1 font-mono text-[10px]">G</kbd> Groupes
-              <kbd className="rounded border bg-muted/50 px-1 font-mono text-[10px]">N</kbd> Nouvel invité
+              <kbd className="rounded border bg-muted/50 px-1 font-mono text-[10px]">
+                G
+              </kbd>{" "}
+              Groupes
+              <kbd className="rounded border bg-muted/50 px-1 font-mono text-[10px]">
+                N
+              </kbd>{" "}
+              Nouvel invité
             </span>
           </div>
         </motion.div>
@@ -697,7 +781,8 @@ export default function ReceptionPage({
             >
               <div className="flex items-center gap-2 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-2 text-sm text-yellow-800">
                 <WifiOff className="size-4 shrink-0" />
-                Mode hors-ligne – Les actions seront synchronisées automatiquement.
+                Mode hors-ligne – Les actions seront synchronisées
+                automatiquement.
               </div>
             </motion.div>
           )}
@@ -731,7 +816,7 @@ export default function ReceptionPage({
                             "flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all active:scale-[0.98]",
                             guest.is_present
                               ? "border-green-200 bg-green-50"
-                              : "border-border bg-white hover:border-gold/50 hover:shadow-sm"
+                              : "border-border bg-white hover:border-gold/50 hover:shadow-sm",
                           )}
                           aria-label={
                             guest.is_present
@@ -745,9 +830,17 @@ export default function ReceptionPage({
                               "flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white transition-colors",
                               guest.is_present
                                 ? "bg-green-500"
-                                : "bg-muted-foreground/30"
+                                : "bg-muted-foreground/30",
                             )}
-                            style={!guest.is_present ? { backgroundColor: stringToColor(`${guest.first_name} ${guest.last_name}`) } : undefined}
+                            style={
+                              !guest.is_present
+                                ? {
+                                    backgroundColor: stringToColor(
+                                      `${guest.first_name} ${guest.last_name}`,
+                                    ),
+                                  }
+                                : undefined
+                            }
                           >
                             {guest.is_present ? (
                               <Check className="size-5" />
@@ -765,13 +858,19 @@ export default function ReceptionPage({
                             </p>
                             <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
                               {guest.table_name && (
-                                <span className="truncate">{guest.table_name}</span>
+                                <span className="truncate">
+                                  {guest.table_name}
+                                </span>
                               )}
                               {guest.group_name && (
-                                <span className="truncate text-gold">{guest.group_name}</span>
+                                <span className="truncate text-gold">
+                                  {guest.group_name}
+                                </span>
                               )}
                               {guest.category && (
-                                <span className="truncate">{guest.category}</span>
+                                <span className="truncate">
+                                  {guest.category}
+                                </span>
                               )}
                               {guest.age_type && guest.age_type !== "adult" && (
                                 <span className="truncate text-muted-foreground/60">
@@ -795,7 +894,9 @@ export default function ReceptionPage({
                                 className="flex items-center gap-1 text-xs text-green-600"
                               >
                                 <Check className="size-3" />
-                                {new Date(guest.checked_in_at).toLocaleTimeString("fr-FR", {
+                                {new Date(
+                                  guest.checked_in_at,
+                                ).toLocaleTimeString("fr-FR", {
                                   hour: "2-digit",
                                   minute: "2-digit",
                                 })}
@@ -821,7 +922,11 @@ export default function ReceptionPage({
                   >
                     <motion.div
                       animate={{ y: [0, -6, 0] }}
-                      transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+                      transition={{
+                        repeat: Infinity,
+                        duration: 3,
+                        ease: "easeInOut",
+                      }}
                     >
                       <PartyPopper className="mx-auto mb-3 size-12 text-muted-foreground/30" />
                     </motion.div>
@@ -871,7 +976,9 @@ export default function ReceptionPage({
                 {groupedView.groups.length > 0 ? (
                   groupedView.groups.map((group, idx) => {
                     const allPresent = group.members.every((m) => m.is_present);
-                    const groupPresent = group.members.filter((m) => m.is_present).length;
+                    const groupPresent = group.members.filter(
+                      (m) => m.is_present,
+                    ).length;
                     return (
                       <motion.div
                         key={group.members[0]?.group_id ?? `g-${idx}`}
@@ -882,7 +989,9 @@ export default function ReceptionPage({
                         <div className="flex items-center justify-between border-b border-border px-4 py-3">
                           <div className="flex items-center gap-2">
                             <Users className="size-5 text-gold" />
-                            <span className="font-medium">{group.groupName}</span>
+                            <span className="font-medium">
+                              {group.groupName}
+                            </span>
                             <span className="text-xs text-muted-foreground">
                               {groupPresent}/{group.members.length}
                             </span>
@@ -894,7 +1003,9 @@ export default function ReceptionPage({
                                 className="bg-gold text-white hover:bg-gold/90"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  checkinGroup(group.members[0]?.group_id ?? "");
+                                  checkinGroup(
+                                    group.members[0]?.group_id ?? "",
+                                  );
                                 }}
                               >
                                 <Check className="mr-1.5 size-4" />
@@ -924,19 +1035,26 @@ export default function ReceptionPage({
                                 onClick={() => togglePresence(member)}
                                 className={cn(
                                   "flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors",
-                                  member.is_present ? "bg-green-50/50" : "hover:bg-muted/30"
+                                  member.is_present
+                                    ? "bg-green-50/50"
+                                    : "hover:bg-muted/30",
                                 )}
                               >
                                 <div
                                   className={cn(
                                     "flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white",
-                                    member.is_present ? "bg-green-500" : "bg-muted-foreground/30 text-white"
+                                    member.is_present
+                                      ? "bg-green-500"
+                                      : "bg-muted-foreground/30 text-white",
                                   )}
                                 >
                                   {member.is_present ? (
                                     <Check className="size-4" />
                                   ) : (
-                                    getInitials(member.first_name, member.last_name)
+                                    getInitials(
+                                      member.first_name,
+                                      member.last_name,
+                                    )
                                   )}
                                 </div>
                                 <span className="flex-1 text-sm font-medium">
@@ -947,7 +1065,9 @@ export default function ReceptionPage({
                                 </span>
                                 {member.is_present && member.checked_in_at && (
                                   <span className="text-xs text-green-600">
-                                    {new Date(member.checked_in_at).toLocaleTimeString("fr-FR", {
+                                    {new Date(
+                                      member.checked_in_at,
+                                    ).toLocaleTimeString("fr-FR", {
                                       hour: "2-digit",
                                       minute: "2-digit",
                                     })}
@@ -968,11 +1088,17 @@ export default function ReceptionPage({
                   >
                     <motion.div
                       animate={{ y: [0, -4, 0] }}
-                      transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+                      transition={{
+                        repeat: Infinity,
+                        duration: 3,
+                        ease: "easeInOut",
+                      }}
                     >
                       <Users className="mx-auto mb-3 size-12 text-muted-foreground/30" />
                     </motion.div>
-                    <p className="text-muted-foreground">Aucun groupe constitué.</p>
+                    <p className="text-muted-foreground">
+                      Aucun groupe constitué.
+                    </p>
                   </motion.div>
                 )}
 
@@ -982,7 +1108,12 @@ export default function ReceptionPage({
                     <p className="text-xs font-medium text-muted-foreground">
                       Invités sans groupe ({groupedView.solos.length})
                     </p>
-                    <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-2">
+                    <motion.div
+                      variants={containerVariants}
+                      initial="hidden"
+                      animate="visible"
+                      className="space-y-2"
+                    >
                       {groupedView.solos.map((guest) => (
                         <motion.div key={guest.id} variants={itemVariants}>
                           <button
@@ -991,15 +1122,25 @@ export default function ReceptionPage({
                               "flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all",
                               guest.is_present
                                 ? "border-green-200 bg-green-50"
-                                : "border-border bg-white hover:border-gold/50"
+                                : "border-border bg-white hover:border-gold/50",
                             )}
                           >
                             <div
                               className={cn(
                                 "flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white",
-                                guest.is_present ? "bg-green-500" : "bg-muted-foreground/30"
+                                guest.is_present
+                                  ? "bg-green-500"
+                                  : "bg-muted-foreground/30",
                               )}
-                              style={!guest.is_present ? { backgroundColor: stringToColor(`${guest.first_name} ${guest.last_name}`) } : undefined}
+                              style={
+                                !guest.is_present
+                                  ? {
+                                      backgroundColor: stringToColor(
+                                        `${guest.first_name} ${guest.last_name}`,
+                                      ),
+                                    }
+                                  : undefined
+                              }
                             >
                               {guest.is_present ? (
                                 <Check className="size-5" />
@@ -1017,7 +1158,9 @@ export default function ReceptionPage({
                             </div>
                             {guest.is_present && guest.checked_in_at && (
                               <span className="text-xs text-green-600">
-                                {new Date(guest.checked_in_at).toLocaleTimeString("fr-FR", {
+                                {new Date(
+                                  guest.checked_in_at,
+                                ).toLocaleTimeString("fr-FR", {
                                   hour: "2-digit",
                                   minute: "2-digit",
                                 })}
@@ -1053,15 +1196,23 @@ export default function ReceptionPage({
                   </h3>
                   <div className="space-y-2">
                     {tables.map((table) => {
-                      const occupied = (Object.values(guestsMap) as Guest[]).filter(
-                        (g) => g.table_id === table.id
-                      ).length;
-                      const fillPct = table.capacity > 0 ? Math.round((occupied / table.capacity) * 100) : 0;
+                      const occupied = (
+                        Object.values(guestsMap) as Guest[]
+                      ).filter((g) => g.table_id === table.id).length;
+                      const fillPct =
+                        table.capacity > 0
+                          ? Math.round((occupied / table.capacity) * 100)
+                          : 0;
                       return (
                         <div key={table.id} className="space-y-0.5">
                           <div className="flex items-center justify-between text-xs">
                             <span className="font-medium">{table.name}</span>
-                            <span className={cn("text-muted-foreground", fillPct >= 100 && "text-red-500 font-semibold")}>
+                            <span
+                              className={cn(
+                                "text-muted-foreground",
+                                fillPct >= 100 && "text-red-500 font-semibold",
+                              )}
+                            >
                               {occupied}/{table.capacity}
                             </span>
                           </div>
@@ -1072,7 +1223,11 @@ export default function ReceptionPage({
                               transition={{ duration: 0.4 }}
                               className={cn(
                                 "h-full rounded-full transition-colors",
-                                fillPct >= 100 ? "bg-red-500" : fillPct >= 75 ? "bg-gold" : "bg-green-500"
+                                fillPct >= 100
+                                  ? "bg-red-500"
+                                  : fillPct >= 75
+                                    ? "bg-gold"
+                                    : "bg-green-500",
                               )}
                             />
                           </div>
@@ -1163,7 +1318,9 @@ export default function ReceptionPage({
               <select
                 id="wi-age"
                 value={wiAgeType}
-                onChange={(e) => setWiAgeType(e.target.value as any)}
+                onChange={(e) =>
+                  setWiAgeType(e.target.value as "adult" | "child" | "baby")
+                }
                 className="h-11 w-full rounded-lg border border-input bg-transparent px-3 text-sm focus-visible:ring-2 focus-visible:ring-gold focus-visible:outline-none"
               >
                 <option value="adult">Adulte</option>
@@ -1288,15 +1445,32 @@ function StatPanel({
           className="text-center"
         >
           <div className="relative inline-flex items-center justify-center">
-            <svg className="size-20 -rotate-90" viewBox="0 0 80 80" aria-hidden="true">
-              <circle cx="40" cy="40" r="34" fill="none" stroke="#e2e8f0" strokeWidth="5" />
+            <svg
+              className="size-20 -rotate-90"
+              viewBox="0 0 80 80"
+              aria-hidden="true"
+            >
+              <circle
+                cx="40"
+                cy="40"
+                r="34"
+                fill="none"
+                stroke="#e2e8f0"
+                strokeWidth="5"
+              />
               <motion.circle
-                cx="40" cy="40" r="34" fill="none" stroke="currentColor"
-                strokeWidth="5" strokeLinecap="round"
+                cx="40"
+                cy="40"
+                r="34"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="5"
+                strokeLinecap="round"
                 strokeDasharray={`${2 * Math.PI * 34}`}
                 initial={{ strokeDashoffset: 2 * Math.PI * 34 }}
                 animate={{
-                  strokeDashoffset: 2 * Math.PI * 34 * (1 - progressPercent / 100),
+                  strokeDashoffset:
+                    2 * Math.PI * 34 * (1 - progressPercent / 100),
                 }}
                 transition={{ duration: 0.6, ease: "easeOut" }}
                 className="text-gold"
@@ -1304,18 +1478,29 @@ function StatPanel({
             </svg>
             <span className="absolute text-lg font-bold">{presentCount}</span>
           </div>
-          <p className="mt-1 text-xs text-muted-foreground" aria-label={`sur ${totalGuests} invités`}>sur {totalGuests} invités</p>
+          <p
+            className="mt-1 text-xs text-muted-foreground"
+            aria-label={`sur ${totalGuests} invités`}
+          >
+            sur {totalGuests} invités
+          </p>
         </motion.div>
 
         {/* Détails */}
         <div className="space-y-2">
           {items.map((item) => (
-            <div key={item.label} className="flex items-center justify-between text-sm" aria-label={item.ariaLabel}>
+            <div
+              key={item.label}
+              className="flex items-center justify-between text-sm"
+              aria-label={item.ariaLabel}
+            >
               <span className="flex items-center gap-1.5 text-muted-foreground">
                 <item.icon className="size-3.5" aria-hidden="true" />
                 {item.label}
               </span>
-              <span className={`font-semibold ${item.color}`}>{item.value}</span>
+              <span className={`font-semibold ${item.color}`}>
+                {item.value}
+              </span>
             </div>
           ))}
         </div>

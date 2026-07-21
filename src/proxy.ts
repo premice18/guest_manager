@@ -1,15 +1,31 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-// Routes d'authentification (accessibles sans session, mais redirigent si déjà connecté)
 const authRoutes = ["/login", "/register"];
-
-// Routes protégées nécessitant une authentification
 const protectedRoutes = ["/dashboard", "/event", "/reception"];
 
-// Proxy Next.js 16 : protège les routes et gère les redirections de session
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW = 60_000;
+const RATE_LIMIT_MAX = 100;
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+    return false;
+  }
+  entry.count++;
+  return entry.count > RATE_LIMIT_MAX;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  const ip = request.headers.get("x-forwarded-for") ?? "unknown";
+  if (isRateLimited(ip)) {
+    return new NextResponse("Trop de requêtes", { status: 429 });
+  }
 
   // Vérifie si la route courante nécessite une protection ou est une page d'auth
   const isProtected = protectedRoutes.some((route) => pathname.startsWith(route));
