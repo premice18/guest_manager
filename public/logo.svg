@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <!-- Fond du cercle -->
+  <circle cx="100" cy="85" r="72" fill="#C9A96E" />
+  <!-- Table ronde vue de dessus -->
+  <circle cx="100" cy="85" r="44" fill="#F8F6F0" />
+  <!-- Cercle intérieur de la table -->
+  <circle cx="100" cy="85" r="22" fill="none" stroke="#C9A96E" stroke-width="1.5" opacity="0.4" />
+  <!-- Nappe / tombé -->
+  <ellipse cx="100" cy="93" rx="44" ry="8" fill="none" stroke="#C9A96E" stroke-width="0.8" opacity="0.2" />
+  <!-- Verre à vin gauche -->
+  <path d="M86 102 L82 112 L90 112 Z" fill="none" stroke="#C9A96E" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M86 102 L86 108" fill="none" stroke="#C9A96E" stroke-width="1.2" stroke-linecap="round" />
+  <circle cx="86" cy="96" r="6" fill="none" stroke="#C9A96E" stroke-width="1.2" />
+  <!-- Verre à vin droit -->
+  <path d="M114 102 L110 112 L118 112 Z" fill="none" stroke="#C9A96E" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M114 102 L114 108" fill="none" stroke="#C9A96E" stroke-width="1.2" stroke-linecap="round" />
+  <circle cx="114" cy="96" r="6" fill="none" stroke="#C9A96E" stroke-width="1.2" />
+  <!-- Texte Guest Manager -->
+  <text x="100" y="175" font-family="Playfair Display, Georgia, serif" font-size="18" fill="#1A1A1A" text-anchor="middle" font-weight="600" letter-spacing="2">GUEST MANAGER</text>
+</svg>
