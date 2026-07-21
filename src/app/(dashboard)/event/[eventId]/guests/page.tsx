@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
+import { nanoid } from "nanoid";
 import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database.types";
 import { Button } from "@/components/ui/button";
@@ -220,7 +221,7 @@ export default function GuestsPage({
         age_type: formAgeType,
         table_id: formTableId === "none" ? null : formTableId,
         group_name: formGroupName.trim() || null,
-        group_id: formGroupId || (formGroupName.trim() ? crypto.randomUUID() : null),
+        group_id: formGroupId || (formGroupName.trim() ? nanoid() : null),
         dietary_notes: formDietary.trim() || null,
         needs_accessibility: formAccessibility,
         notes: formNotes.trim() || null,
@@ -285,7 +286,7 @@ export default function GuestsPage({
       toast.error("Sélectionnez au moins 2 invités");
       return;
     }
-    const groupId = crypto.randomUUID();
+    const groupId = nanoid();
     try {
       const { error } = await supabase
         .from("guests")

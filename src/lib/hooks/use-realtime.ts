@@ -4,6 +4,9 @@ import { useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useReceptionStore } from "@/lib/store/reception-store";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
+import type { Database } from "@/types/database.types";
+
+type Guest = Database["public"]["Tables"]["guests"]["Row"];
 
 // Hook d'écoute des changements en temps réel sur la table guests
 // Met à jour le store Zustand à chaque modification (check-in, walk-in)
@@ -27,10 +30,9 @@ export function useRealtimeGuests(eventId: string) {
           table: "guests",
           filter: `event_id=eq.${eventId}`,
         },
-        (payload: RealtimePostgresChangesPayload<any>) => {
-          // Ajoute le nouvel invité au store
-          const newGuest = payload.new;
-          if (newGuest) {
+        (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
+          const newGuest = payload.new as Guest;
+          if (newGuest?.id) {
             updateGuest(newGuest.id, newGuest);
           }
         }
@@ -43,10 +45,9 @@ export function useRealtimeGuests(eventId: string) {
           table: "guests",
           filter: `event_id=eq.${eventId}`,
         },
-        (payload: RealtimePostgresChangesPayload<any>) => {
-          // Met à jour l'invité modifié (check-in, changement de table, etc.)
-          const updatedGuest = payload.new;
-          if (updatedGuest) {
+        (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
+          const updatedGuest = payload.new as Guest;
+          if (updatedGuest?.id) {
             updateGuest(updatedGuest.id, updatedGuest);
           }
         }

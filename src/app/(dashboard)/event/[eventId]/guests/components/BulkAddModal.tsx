@@ -3,6 +3,7 @@
 // Permet de saisir plusieurs invités simultanément avec prénom, nom, type (singleton/couple) et table
 // Supporte l'import CSV intégré et la création de couples liés par group_id
 
+import { nanoid } from "nanoid";
 import { useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database.types";
@@ -218,7 +219,7 @@ export default function BulkAddModal({
 
       for (const group of coupleGroups) {
         if (group.length < 2) continue;
-        const groupId = crypto.randomUUID();
+        const groupId = nanoid();
         const lastName = group[0].lastName || group[1]?.lastName || "Couple";
 
         for (const member of group) {
