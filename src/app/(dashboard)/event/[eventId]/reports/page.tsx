@@ -20,7 +20,7 @@ import {
   FilePen,
 } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 
 type Event = Database["public"]["Tables"]["events"]["Row"];
 
@@ -113,6 +113,7 @@ export default function ReportsPage({
 }: {
   params: Promise<{ eventId: string }>;
 }) {
+  const prefersReducedMotion = useReducedMotion();
   const [eventId, setEventId] = useState("");
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
@@ -170,8 +171,8 @@ export default function ReportsPage({
 
       {/* En-tête */}
       <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={prefersReducedMotion ? false : { opacity: 0, y: 16 }}
+        animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
         transition={{ type: "spring" as const, stiffness: 200, damping: 24 }}
         className="mb-8"
       >
@@ -195,8 +196,8 @@ export default function ReportsPage({
               key={exp.key}
               custom={idx}
               variants={cardVariants}
-              initial="hidden"
-              animate="visible"
+              initial={prefersReducedMotion ? false : "hidden"}
+              animate={prefersReducedMotion ? {} : "visible"}
             >
               <Card className="flex h-full flex-col transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
                 <CardHeader>
@@ -215,8 +216,8 @@ export default function ReportsPage({
                     {exp.description}
                   </p>
                   <motion.div
-                    whileHover={{ scale: 1.03 }}
-                    whileTap={{ scale: 0.97 }}
+                    whileHover={prefersReducedMotion ? {} : { scale: 1.03 }}
+                    whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}
                   >
                     <a
                       href={exp.url(eventId)}
@@ -228,13 +229,10 @@ export default function ReportsPage({
                       }}
                     >
                       <Button
-                        className="w-full gap-2 bg-gold text-white hover:bg-gold/90"
+                        className="w-full gap-2 bg-gold text-deep-black hover:bg-gold/90"
                         disabled={isDownloading}
                       >
-                        <Download className={cn(
-                          "size-4",
-                          isDownloading && "animate-bounce"
-                        )} />
+                        <Download className="size-4" />
                         {isDownloading ? "Génération..." : "Télécharger"}
                       </Button>
                     </a>
@@ -248,3 +246,4 @@ export default function ReportsPage({
     </main>
   );
 }
+

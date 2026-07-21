@@ -27,7 +27,7 @@ import {
   Clock,
 } from "lucide-react";
 import { cn, formatDate, formatTime } from "@/lib/utils";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   AreaChart,
   Area,
@@ -165,6 +165,7 @@ export default function DashboardStatsPage({
 }: {
   params: Promise<{ eventId: string }>;
 }) {
+  const prefersReducedMotion = useReducedMotion();
   const [eventId, setEventId] = useState("");
   const supabase = createClient();
 
@@ -458,8 +459,8 @@ export default function DashboardStatsPage({
 
       {/* En-tête */}
       <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={prefersReducedMotion ? false : { opacity: 0, y: 16 }}
+        animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
         transition={{ type: "spring" as const, stiffness: 200, damping: 24 }}
         className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
       >
@@ -476,11 +477,7 @@ export default function DashboardStatsPage({
         <div className="flex items-center gap-2 rounded-full bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 ring-1 ring-green-200">
           <span className="relative flex size-2">
             <span className={cn(
-              "absolute inline-flex h-full w-full animate-ping rounded-full opacity-75",
-              isOnline ? "bg-green-500" : "bg-red-500"
-            )} />
-            <span className={cn(
-              "relative inline-flex size-2 rounded-full",
+              "inline-flex size-2 rounded-full opacity-90",
               isOnline ? "bg-green-500" : "bg-red-500"
             )} />
           </span>
@@ -490,8 +487,8 @@ export default function DashboardStatsPage({
 
       {/* Boutons d'export */}
       <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={prefersReducedMotion ? false : { opacity: 0, y: 10 }}
+        animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
         transition={{ delay: 0.1, type: "spring" as const, stiffness: 200, damping: 24 }}
         className="mb-6 flex flex-wrap gap-2"
       >
@@ -527,8 +524,8 @@ export default function DashboardStatsPage({
         <motion.div
           custom={0}
           variants={kpiCardVariants}
-          initial="hidden"
-          animate="visible"
+          initial={prefersReducedMotion ? false : "hidden"}
+          animate={prefersReducedMotion ? {} : "visible"}
         >
           <Card className="transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
             <CardHeader className="pb-2">
@@ -552,8 +549,8 @@ export default function DashboardStatsPage({
         <motion.div
           custom={1}
           variants={kpiCardVariants}
-          initial="hidden"
-          animate="visible"
+          initial={prefersReducedMotion ? false : "hidden"}
+          animate={prefersReducedMotion ? {} : "visible"}
         >
           <Card className="transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
             <CardHeader className="pb-2">
@@ -585,8 +582,8 @@ export default function DashboardStatsPage({
         <motion.div
           custom={2}
           variants={kpiCardVariants}
-          initial="hidden"
-          animate="visible"
+          initial={prefersReducedMotion ? false : "hidden"}
+          animate={prefersReducedMotion ? {} : "visible"}
         >
           <Card className="transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
             <CardHeader className="pb-2">
@@ -612,8 +609,8 @@ export default function DashboardStatsPage({
         <motion.div
           custom={3}
           variants={kpiCardVariants}
-          initial="hidden"
-          animate="visible"
+          initial={prefersReducedMotion ? false : "hidden"}
+          animate={prefersReducedMotion ? {} : "visible"}
         >
           <Card className="transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
             <CardHeader className="pb-2">
@@ -642,8 +639,8 @@ export default function DashboardStatsPage({
         <motion.div
           custom={0}
           variants={graphVariants}
-          initial="hidden"
-          animate="visible"
+          initial={prefersReducedMotion ? false : "hidden"}
+          animate={prefersReducedMotion ? {} : "visible"}
         >
           <Card className="overflow-hidden">
             <CardHeader>
@@ -690,8 +687,8 @@ export default function DashboardStatsPage({
         <motion.div
           custom={1}
           variants={graphVariants}
-          initial="hidden"
-          animate="visible"
+          initial={prefersReducedMotion ? false : "hidden"}
+          animate={prefersReducedMotion ? {} : "visible"}
         >
           <Card className="overflow-hidden">
             <CardHeader>
@@ -744,8 +741,8 @@ export default function DashboardStatsPage({
         <motion.div
           custom={2}
           variants={graphVariants}
-          initial="hidden"
-          animate="visible"
+          initial={prefersReducedMotion ? false : "hidden"}
+          animate={prefersReducedMotion ? {} : "visible"}
         >
           <Card className="overflow-hidden">
             <CardHeader>
@@ -801,8 +798,8 @@ export default function DashboardStatsPage({
         <motion.div
           custom={3}
           variants={graphVariants}
-          initial="hidden"
-          animate="visible"
+          initial={prefersReducedMotion ? false : "hidden"}
+          animate={prefersReducedMotion ? {} : "visible"}
         >
           <Card className="overflow-hidden">
             <CardHeader>
@@ -844,8 +841,8 @@ export default function DashboardStatsPage({
 
       {/* Section Alertes */}
       <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={prefersReducedMotion ? false : { opacity: 0, y: 30 }}
+        animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
         transition={{ delay: 0.5, type: "spring" as const, stiffness: 180, damping: 24 }}
       >
         <Card>

@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database.types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Card,
@@ -20,7 +21,7 @@ import {
 import { toast } from "sonner";
 import { ArrowLeft, Plus, Pencil, Trash2, Archive, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 type Event = Database["public"]["Tables"]["events"]["Row"];
 type Zone = Database["public"]["Tables"]["zones"]["Row"];
@@ -72,6 +73,7 @@ export default function EventSettingsPage({
 }: {
   params: Promise<{ eventId: string }>;
 }) {
+  const prefersReducedMotion = useReducedMotion();
   const router = useRouter();
   const [eventId, setEventId] = useState<string>("");
   const supabase = createClient();
@@ -241,8 +243,8 @@ export default function EventSettingsPage({
       </Link>
 
       <motion.h1
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={prefersReducedMotion ? false : { opacity: 0, y: 16 }}
+        animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
         transition={{ type: "spring" as const, stiffness: 200, damping: 24 }}
         className="mb-8 font-serif text-3xl text-deep-black"
       >
@@ -252,8 +254,8 @@ export default function EventSettingsPage({
       {/* Section : Informations générales */}
       <motion.div
         variants={sectionVariants}
-        initial="hidden"
-        animate="visible"
+        initial={prefersReducedMotion ? false : "hidden"}
+        animate={prefersReducedMotion ? {} : "visible"}
       >
         <Card className="mb-8">
           <CardHeader>
@@ -279,33 +281,32 @@ export default function EventSettingsPage({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
-                <textarea
+                <Textarea
                   id="description"
                   rows={3}
-                  className="h-auto w-full min-w-0 rounded-lg border border-input bg-transparent px-3 py-2 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-gold md:text-sm"
                   {...register("description")}
                 />
               </div>
               <div className="flex gap-3">
-                <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                  <Button type="submit" className="bg-gold text-white hover:bg-gold/90" disabled={isSubmitting}>
+                <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
+                  <Button type="submit" className="bg-gold text-deep-black hover:bg-gold/90" disabled={isSubmitting}>
                     {isSubmitting ? "Sauvegarde..." : "Enregistrer"}
                   </Button>
                 </motion.div>
-                <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                   <Button type="button" variant="outline" onClick={toggleArchive}>
                     {event.is_archived ? (
                       <><motion.span
                         key="restore"
-                        initial={{ rotate: -90, opacity: 0 }}
-                        animate={{ rotate: 0, opacity: 1 }}
+                        initial={prefersReducedMotion ? false : { rotate: -90, opacity: 0 }}
+                        animate={prefersReducedMotion ? {} : { rotate: 0, opacity: 1 }}
                         transition={{ duration: 0.3 }}
                       ><RotateCcw className="mr-1.5 size-4" /></motion.span> Restaurer</>
                     ) : (
                       <><motion.span
                         key="archive"
-                        initial={{ y: -4, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
+                        initial={prefersReducedMotion ? false : { y: -4, opacity: 0 }}
+                        animate={prefersReducedMotion ? {} : { y: 0, opacity: 1 }}
                         transition={{ duration: 0.3 }}
                       ><Archive className="mr-1.5 size-4" /></motion.span> Archiver</>
                     )}
@@ -320,8 +321,8 @@ export default function EventSettingsPage({
       {/* Section : Gestion des zones */}
       <motion.div
         variants={sectionVariants}
-        initial="hidden"
-        animate="visible"
+        initial={prefersReducedMotion ? false : "hidden"}
+        animate={prefersReducedMotion ? {} : "visible"}
       >
         <Card>
           <CardHeader>
@@ -347,7 +348,7 @@ export default function EventSettingsPage({
                 onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), saveZone())}
                 className="focus-visible:ring-2 focus-visible:ring-gold"
               />
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+              <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                 <Button onClick={saveZone} className="shrink-0">
                   {editingZone ? <Pencil className="size-4" /> : <Plus className="size-4" />}
                   {editingZone ? "Modifier" : "Ajouter"}
@@ -356,12 +357,12 @@ export default function EventSettingsPage({
               <AnimatePresence>
                 {editingZone && (
                   <motion.div
-                    initial={{ opacity: 0, width: 0 }}
-                    animate={{ opacity: 1, width: "auto" }}
-                    exit={{ opacity: 0, width: 0 }}
+                    initial={prefersReducedMotion ? false : { opacity: 0, width: 0 }}
+                    animate={prefersReducedMotion ? {} : { opacity: 1, width: "auto" }}
+                    exit={prefersReducedMotion ? {} : { opacity: 0, width: 0 }}
                     transition={{ duration: 0.2 }}
-                    whileHover={{ scale: 1.03 }}
-                    whileTap={{ scale: 0.97 }}
+                    whileHover={prefersReducedMotion ? {} : { scale: 1.03 }}
+                    whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}
                   >
                     <Button
                       variant="outline"
@@ -384,18 +385,19 @@ export default function EventSettingsPage({
                   <motion.div
                     key={zone.id}
                     variants={zoneItemVariants}
-                    initial="hidden"
-                    animate="visible"
-                    exit="exit"
+                    initial={prefersReducedMotion ? false : "hidden"}
+                    animate={prefersReducedMotion ? {} : "visible"}
+                    exit={prefersReducedMotion ? {} : "exit"}
                     layout
                     className="flex items-center justify-between rounded-lg border border-border px-4 py-3 transition-colors hover:border-gold/30"
                   >
                     <span className="font-medium">{zone.name}</span>
                     <div className="flex gap-1">
-                      <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                      <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.1 }} whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}>
                         <Button
                           variant="ghost"
                           size="icon"
+                          aria-label="Modifier"
                           onClick={() => {
                             setEditingZone(zone);
                             setZoneName(zone.name);
@@ -404,10 +406,11 @@ export default function EventSettingsPage({
                           <Pencil className="size-4" />
                         </Button>
                       </motion.div>
-                      <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                      <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.1 }} whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}>
                         <Button
                           variant="ghost"
                           size="icon"
+                          aria-label="Supprimer"
                           onClick={() => deleteZone(zone.id)}
                           className="text-destructive hover:text-destructive"
                         >
@@ -420,8 +423,8 @@ export default function EventSettingsPage({
               </AnimatePresence>
               {zones.length === 0 && (
                 <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
+                  initial={prefersReducedMotion ? false : { opacity: 0 }}
+                  animate={prefersReducedMotion ? {} : { opacity: 1 }}
                   className="text-sm text-muted-foreground"
                 >
                   Aucune zone pour le moment.
@@ -434,3 +437,4 @@ export default function EventSettingsPage({
     </main>
   );
 }
+

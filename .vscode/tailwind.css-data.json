@@ -1,0 +1,25 @@
+{
+  "version": 1.1,
+  "atDirectives": [
+    {
+      "name": "@theme",
+      "description": "Tailwind CSS v4: Defines theme tokens (colors, fonts, spacing, etc.) in CSS-based configuration.",
+      "references": [
+        {
+          "name": "Tailwind CSS v4 Documentation",
+          "url": "https://tailwindcss.com/docs/theme"
+        }
+      ]
+    },
+    {
+      "name": "@import",
+      "description": "Tailwind CSS v4: Import another CSS file or the Tailwind framework itself.",
+      "references": [
+        {
+          "name": "Tailwind CSS v4 Documentation",
+          "url": "https://tailwindcss.com/docs/import"
+        }
+      ]
+    }
+  ]
+}

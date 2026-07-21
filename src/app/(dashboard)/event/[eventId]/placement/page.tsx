@@ -44,7 +44,7 @@ import {
   UserX,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 type Guest = Database["public"]["Tables"]["guests"]["Row"];
 type Table = Database["public"]["Tables"]["tables"]["Row"];
@@ -77,6 +77,7 @@ const staggerItem = {
 
 // === Composant : Invité draggable (utilisé dans la liste non placés ET dans les tables) ===
 function DraggableGuest({ guest, compact }: { guest: Guest; compact?: boolean }) {
+  const prefersReducedMotion = useReducedMotion();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `guest-${guest.id}`,
     data: { guest },
@@ -88,8 +89,8 @@ function DraggableGuest({ guest, compact }: { guest: Guest; compact?: boolean })
 
   return (
     <motion.div
-      whileHover={{ scale: 1.02, borderColor: "rgba(201, 169, 110, 0.5)" }}
-      whileTap={{ scale: 0.98 }}
+      whileHover={prefersReducedMotion ? {} : { scale: 1.02, borderColor: "rgba(201, 169, 110, 0.5)" }}
+      whileTap={prefersReducedMotion ? {} : { scale: 0.98 }}
       ref={setNodeRef}
       {...listeners}
       {...attributes}
@@ -150,6 +151,7 @@ function DroppableTable({
   capacity: number;
   isLocked: boolean;
 }) {
+  const prefersReducedMotion = useReducedMotion();
   const { setNodeRef, isOver } = useDroppable({
     id: `table-${table.id}`,
     data: { table },
@@ -162,7 +164,7 @@ function DroppableTable({
 
   return (
     <motion.div
-      whileHover={!isLocked ? { scale: 1.015, borderColor: "#C9A96E" } : undefined}
+      whileHover={!isLocked && !prefersReducedMotion ? { scale: 1.015, borderColor: "#C9A96E" } : undefined}
       ref={setNodeRef}
       className={cn(
         "rounded-xl border-2 p-3 transition-all duration-200",
@@ -174,8 +176,8 @@ function DroppableTable({
               ? "border-red-300 bg-red-50"
               : "border-border bg-white hover:border-gold/50 hover:shadow-sm"
       )}
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={prefersReducedMotion ? false : { opacity: 0, y: 16 }}
+      animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
       transition={{ type: "spring" as const, stiffness: 200, damping: 24 }}
     >
       <div className="mb-2 flex items-center justify-between">
@@ -193,7 +195,7 @@ function DroppableTable({
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${fillPercent}%` }}
-          transition={{ duration: 0.6, ease: "easeOut", type: "spring" as const, stiffness: 100 }}
+          transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.6, ease: "easeOut", type: "spring" as const, stiffness: 100 }}
           className={cn(
             "h-full rounded-full",
             isFull ? "bg-red-500" : fillRatio >= 0.75 ? "bg-gold" : "bg-green-500"
@@ -222,6 +224,7 @@ export default function PlacementPage({
 }: {
   params: Promise<{ eventId: string }>;
 }) {
+  const prefersReducedMotion = useReducedMotion();
   const [eventId, setEventId] = useState("");
   const supabase = createClient();
 
@@ -625,8 +628,8 @@ export default function PlacementPage({
           {/* Colonne gauche : invités non placés */}
           <motion.div
             variants={panelVariants}
-            initial="hidden"
-            animate="visible"
+            initial={prefersReducedMotion ? false : "hidden"}
+            animate={prefersReducedMotion ? {} : "visible"}
             className="w-full shrink-0 lg:w-80"
           >
             <Card>
@@ -659,8 +662,8 @@ export default function PlacementPage({
                   <motion.div
                     key={group.groupId}
                     variants={staggerContainer}
-                    initial="hidden"
-                    animate="visible"
+                    initial={prefersReducedMotion ? false : "hidden"}
+                    animate={prefersReducedMotion ? {} : "visible"}
                     className="space-y-1"
                   >
                     <div className="flex items-center justify-between gap-1.5 border-b border-gold/20 pb-1">
@@ -687,8 +690,8 @@ export default function PlacementPage({
                   <motion.div
                     key={g.id}
                     variants={staggerItem}
-                    initial="hidden"
-                    animate="visible"
+                    initial={prefersReducedMotion ? false : "hidden"}
+                    animate={prefersReducedMotion ? {} : "visible"}
                   >
                     <DraggableGuest guest={g} />
                   </motion.div>
@@ -696,13 +699,13 @@ export default function PlacementPage({
 
                 {unplacedGuests.length === 0 && (
                   <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={prefersReducedMotion ? false : { opacity: 0, y: 10 }}
+                    animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
                     className="py-4 text-center"
                   >
                     <motion.div
-                      animate={{ y: [0, -4, 0] }}
+                      animate={prefersReducedMotion ? {} : { y: [0, -4, 0] }}
                       transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
                     >
                       <Users className="mx-auto mb-2 size-8 text-muted-foreground/30" />
@@ -718,8 +721,8 @@ export default function PlacementPage({
 
           {/* Colonne droite : grille des tables */}
           <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, x: 20 }}
+            animate={prefersReducedMotion ? {} : { opacity: 1, x: 0 }}
             transition={{ type: "spring" as const, stiffness: 200, damping: 24, delay: 0.1 }}
             className="flex-1"
           >
@@ -738,13 +741,13 @@ export default function PlacementPage({
 
             {tables.length === 0 && (
               <motion.div
-                initial={{ opacity: 0, scale: 0.97 }}
-                animate={{ opacity: 1, scale: 1 }}
+                initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.97 }}
+                animate={prefersReducedMotion ? {} : { opacity: 1, scale: 1 }}
                 transition={{ type: "spring" as const, stiffness: 200, damping: 24 }}
                 className="rounded-xl border-2 border-dashed border-border bg-white p-12 text-center"
               >
                 <motion.div
-                  animate={{ y: [0, -6, 0] }}
+                  animate={prefersReducedMotion ? {} : { y: [0, -6, 0] }}
                   transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
                 >
                   <TableIcon className="mx-auto mb-4 size-12 text-muted-foreground/40" />
@@ -769,9 +772,9 @@ export default function PlacementPage({
           <AnimatePresence>
             {activeGuest && (
               <motion.div
-                initial={{ scale: 0.9, opacity: 0, rotate: -2 }}
-                animate={{ scale: 1, opacity: 1, rotate: 0 }}
-                exit={{ scale: 0.9, opacity: 0 }}
+                initial={prefersReducedMotion ? false : { scale: 0.9, opacity: 0, rotate: -2 }}
+                animate={prefersReducedMotion ? {} : { scale: 1, opacity: 1, rotate: 0 }}
+                exit={prefersReducedMotion ? {} : { scale: 0.9, opacity: 0 }}
                 transition={{ type: "spring" as const, stiffness: 300, damping: 20 }}
                 className="flex items-center gap-2 rounded-xl border-2 border-gold bg-white px-4 py-3 shadow-xl shadow-gold/20"
               >
@@ -794,8 +797,8 @@ export default function PlacementPage({
       <Dialog open={moveConfirmOpen} onOpenChange={setMoveConfirmOpen}>
         <DialogContent>
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95 }}
+            animate={prefersReducedMotion ? {} : { opacity: 1, scale: 1 }}
             transition={{ type: "spring" as const, stiffness: 260, damping: 24 }}
           >
             <DialogHeader>
@@ -841,12 +844,12 @@ export default function PlacementPage({
             <DialogFooter className="flex-col-reverse gap-2 sm:flex-col">
               {isGroupMove ? (
                 <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
-                  <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                  <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                     <Button variant="outline" onClick={cancelMove} className="w-full sm:w-auto">
                       Annuler
                     </Button>
                   </motion.div>
-                  <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                  <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                     <Button
                       variant="outline"
                       onClick={confirmMoveSolo}
@@ -855,10 +858,10 @@ export default function PlacementPage({
                       Déplacer seul
                     </Button>
                   </motion.div>
-                  <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                  <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                     <Button
                       onClick={confirmGroupMove}
-                      className="w-full bg-gold text-white hover:bg-gold/90 sm:w-auto"
+                      className="w-full bg-gold text-deep-black hover:bg-gold/90 sm:w-auto"
                     >
                       Déplacer tout le groupe
                     </Button>
@@ -866,15 +869,15 @@ export default function PlacementPage({
                 </div>
               ) : (
                 <div className="flex w-full gap-2 sm:justify-end">
-                  <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                  <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                     <Button variant="outline" onClick={cancelMove}>
                       Annuler
                     </Button>
                   </motion.div>
-                  <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                  <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                     <Button
                       onClick={confirmMove}
-                      className="bg-gold text-white hover:bg-gold/90"
+                      className="bg-gold text-deep-black hover:bg-gold/90"
                     >
                       Oui, déplacer
                     </Button>
@@ -890,8 +893,8 @@ export default function PlacementPage({
       <Dialog open={groupAlertOpen} onOpenChange={setGroupAlertOpen}>
         <DialogContent>
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95 }}
+            animate={prefersReducedMotion ? {} : { opacity: 1, scale: 1 }}
             transition={{ type: "spring" as const, stiffness: 260, damping: 24 }}
           >
             <DialogHeader>
@@ -906,11 +909,11 @@ export default function PlacementPage({
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+              <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                 <Button variant="outline" onClick={cancelGroupDrop}>Non, annuler</Button>
               </motion.div>
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                <Button onClick={confirmGroupDrop} className="bg-gold text-white hover:bg-gold/90">
+              <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
+                <Button onClick={confirmGroupDrop} className="bg-gold text-deep-black hover:bg-gold/90">
                   Oui, d&eacute;placer tout le groupe
                 </Button>
               </motion.div>
@@ -921,3 +924,4 @@ export default function PlacementPage({
     </main>
   );
 }
+

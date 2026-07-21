@@ -2,6 +2,9 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef, use } from "react";
 import Link from "next/link";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { nanoid } from "nanoid";
 import { createClient } from "@/lib/supabase/client";
 import { useReceptionStore } from "@/lib/store/reception-store";
@@ -9,6 +12,7 @@ import { useRealtimeGuests } from "@/lib/hooks/use-realtime";
 import type { Database } from "@/types/database.types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -40,7 +44,7 @@ import {
   Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 type Guest = Database["public"]["Tables"]["guests"]["Row"];
 type Table = Database["public"]["Tables"]["tables"]["Row"];
@@ -51,6 +55,15 @@ const AGE_LABELS: Record<string, string> = {
   baby: "Bébé",
 };
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+
+const walkinSchema = z.object({
+  first_name: z.string().min(1, "Prénom requis").trim(),
+  last_name: z.string().min(1, "Nom requis").trim(),
+  category: z.string(),
+  age_type: z.enum(["adult", "child", "baby"]),
+  table_id: z.string(),
+  notes: z.string().trim().optional(),
+});
 
 function stringToColor(str: string) {
   let hash = 0;
@@ -93,6 +106,7 @@ export default function ReceptionPage({
 }: {
   params: Promise<{ eventId: string }>;
 }) {
+  const prefersReducedMotion = useReducedMotion();
   const { eventId } = use(params);
   const supabase = createClient();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -119,15 +133,24 @@ export default function ReceptionPage({
   const [statsOpen, setStatsOpen] = useState(false);
 
   const [walkinModal, setWalkinModal] = useState(false);
-  const [wiFirstName, setWiFirstName] = useState("");
-  const [wiLastName, setWiLastName] = useState("");
-  const [wiCategory, setWiCategory] = useState("Invité imprévu");
-  const [wiAgeType, setWiAgeType] = useState<"adult" | "child" | "baby">(
-    "adult",
-  );
-  const [wiTableId, setWiTableId] = useState("none");
-  const [wiNotes, setWiNotes] = useState("");
   const [wiSaving, setWiSaving] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    reset: resetWalkinForm,
+    formState: { errors: wiErrors },
+  } = useForm<z.infer<typeof walkinSchema>>({
+    resolver: zodResolver(walkinSchema),
+    defaultValues: {
+      first_name: "",
+      last_name: "",
+      category: "Invité imprévu",
+      age_type: "adult",
+      table_id: "none",
+      notes: "",
+    },
+  });
 
   const progressPercent =
     totalGuests > 0 ? Math.round((presentCount / totalGuests) * 100) : 0;
@@ -315,23 +338,21 @@ export default function ReceptionPage({
     }
   };
 
-  const addWalkin = async () => {
-    if (!wiFirstName.trim() || !wiLastName.trim()) {
-      toast.error("Prénom et nom requis");
-      return;
-    }
+  const addWalkin = handleSubmit(async (formData) => {
     setWiSaving(true);
     try {
       const { data, error } = await supabase
         .from("guests")
         .insert({
           event_id: eventId,
-          first_name: wiFirstName.trim(),
-          last_name: wiLastName.trim(),
-          category: wiCategory.trim() || "Invité imprévu",
-          age_type: wiAgeType,
-          table_id: wiTableId === "none" ? null : wiTableId,
-          notes: wiNotes.trim() || null,
+          first_name: formData.first_name.trim(),
+          last_name: formData.last_name.trim(),
+          category: formData.category
+            ? formData.category.trim()
+            : "Invité imprévu",
+          age_type: formData.age_type,
+          table_id: formData.table_id === "none" ? null : formData.table_id,
+          notes: formData.notes?.trim() || null,
           is_present: true,
           checked_in_at: new Date().toISOString(),
         })
@@ -348,12 +369,7 @@ export default function ReceptionPage({
           ?.name ?? "non placé";
       toast.success(`${data.first_name} ${data.last_name} → ${tableName}`);
       setWalkinModal(false);
-      setWiFirstName("");
-      setWiLastName("");
-      setWiCategory("Invité imprévu");
-      setWiAgeType("adult");
-      setWiTableId("none");
-      setWiNotes("");
+      resetWalkinForm();
 
       await refreshGuests();
     } catch {
@@ -361,7 +377,7 @@ export default function ReceptionPage({
     } finally {
       setWiSaving(false);
     }
-  };
+  });
 
   const syncPendingActions = useCallback(async () => {
     if (pendingActions.length === 0) return;
@@ -476,7 +492,7 @@ export default function ReceptionPage({
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-off-white">
         <motion.div
-          animate={{ rotate: 360 }}
+          animate={prefersReducedMotion ? {} : { rotate: 360 }}
           transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
           className="size-12 rounded-full border-4 border-gold/30 border-t-gold"
         />
@@ -491,8 +507,8 @@ export default function ReceptionPage({
     <div className="min-h-screen bg-off-white">
       {/* ===== En-tête ===== */}
       <motion.header
-        initial={{ y: -60, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
+        initial={prefersReducedMotion ? false : { y: -60, opacity: 0 }}
+        animate={prefersReducedMotion ? {} : { y: 0, opacity: 1 }}
         transition={{ type: "spring", stiffness: 180, damping: 20 }}
         className="sticky top-0 z-40 border-b border-border bg-white shadow-sm"
       >
@@ -513,7 +529,7 @@ export default function ReceptionPage({
                   </h1>
                   {/* Indicateur de statut en temps réel */}
                   <motion.span
-                    animate={{ scale: [1, 1.3, 1] }}
+                    animate={prefersReducedMotion ? {} : { scale: [1, 1.3, 1] }}
                     transition={{
                       repeat: Infinity,
                       duration: 2,
@@ -536,8 +552,8 @@ export default function ReceptionPage({
                   </span>
                   {pendingActions.length > 0 && (
                     <motion.span
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
+                      initial={prefersReducedMotion ? false : { scale: 0 }}
+                      animate={prefersReducedMotion ? {} : { scale: 1 }}
                       className="rounded-full bg-gold/10 px-2 py-0.5 text-gold"
                     >
                       {pendingActions.length} en attente
@@ -551,8 +567,8 @@ export default function ReceptionPage({
             <div className="text-right">
               <motion.p
                 key={presentCount}
-                initial={{ scale: 1.3, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
+                initial={prefersReducedMotion ? false : { scale: 1.3, opacity: 0 }}
+                animate={prefersReducedMotion ? {} : { scale: 1, opacity: 1 }}
                 transition={{ type: "spring", stiffness: 300 }}
                 className="text-lg font-bold sm:text-2xl"
               >
@@ -581,7 +597,7 @@ export default function ReceptionPage({
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${progressPercent}%` }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
+              transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.5, ease: "easeOut" }}
               className={cn(
                 "h-full rounded-full transition-colors",
                 getProgressColor(),
@@ -594,8 +610,8 @@ export default function ReceptionPage({
       <main className="mx-auto max-w-5xl px-3 py-4 sm:px-4">
         {/* ===== Barre de recherche et filtres ===== */}
         <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: -10 }}
+          animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="mb-4 space-y-3"
         >
@@ -621,12 +637,12 @@ export default function ReceptionPage({
               aria-label="Filtre alphabétique"
             >
               <motion.button
-                whileTap={{ scale: 0.9 }}
+                whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}
                 onClick={() => setFilterLetter("")}
                 className={cn(
                   "flex size-8 shrink-0 items-center justify-center rounded-md text-xs font-medium transition-colors",
                   !filterLetter
-                    ? "bg-gold text-white"
+                    ? "bg-gold text-deep-black"
                     : "bg-white text-muted-foreground hover:bg-muted",
                 )}
                 aria-label="Toutes les lettres"
@@ -636,14 +652,14 @@ export default function ReceptionPage({
               {LETTERS.map((letter) => (
                 <motion.button
                   key={letter}
-                  whileTap={{ scale: 0.9 }}
+                  whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}
                   onClick={() =>
                     setFilterLetter(letter === filterLetter ? "" : letter)
                   }
                   className={cn(
                     "flex size-8 shrink-0 items-center justify-center rounded-md text-xs font-medium transition-colors",
                     filterLetter === letter
-                      ? "bg-gold text-white"
+                      ? "bg-gold text-deep-black"
                       : "bg-white text-muted-foreground hover:bg-muted",
                   )}
                   aria-label={`Lettre ${letter}`}
@@ -683,7 +699,7 @@ export default function ReceptionPage({
             </select>
 
             <motion.div
-              whileTap={{ scale: 0.95 }}
+              whileTap={prefersReducedMotion ? {} : { scale: 0.95 }}
               className="inline-flex overflow-hidden rounded-lg border border-input bg-white"
             >
               <button
@@ -691,7 +707,7 @@ export default function ReceptionPage({
                 className={cn(
                   "flex items-center gap-1 px-3 py-2 text-xs font-medium transition-colors",
                   viewMode === "list"
-                    ? "bg-gold text-white"
+                    ? "bg-gold text-deep-black"
                     : "text-muted-foreground hover:text-foreground",
                 )}
                 aria-label="Vue liste"
@@ -705,7 +721,7 @@ export default function ReceptionPage({
                 className={cn(
                   "flex items-center gap-1 px-3 py-2 text-xs font-medium transition-colors",
                   viewMode === "groups"
-                    ? "bg-gold text-white"
+                    ? "bg-gold text-deep-black"
                     : "text-muted-foreground hover:text-foreground",
                 )}
                 aria-label="Vue groupes"
@@ -751,9 +767,9 @@ export default function ReceptionPage({
         <AnimatePresence>
           {statsOpen && (
             <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
+              initial={prefersReducedMotion ? false : { height: 0, opacity: 0 }}
+              animate={prefersReducedMotion ? {} : { height: "auto", opacity: 1 }}
+              exit={prefersReducedMotion ? {} : { height: 0, opacity: 0 }}
               transition={{ duration: 0.2 }}
               className="mb-4 overflow-hidden sm:hidden"
             >
@@ -774,9 +790,9 @@ export default function ReceptionPage({
         <AnimatePresence>
           {!isOnline && (
             <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
+              initial={prefersReducedMotion ? false : { height: 0, opacity: 0 }}
+              animate={prefersReducedMotion ? {} : { height: "auto", opacity: 1 }}
+              exit={prefersReducedMotion ? {} : { height: 0, opacity: 0 }}
               className="mb-4 overflow-hidden"
             >
               <div className="flex items-center gap-2 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-2 text-sm text-yellow-800">
@@ -799,8 +815,8 @@ export default function ReceptionPage({
                   <motion.div
                     key="guest-list"
                     variants={containerVariants}
-                    initial="hidden"
-                    animate="visible"
+                    initial={prefersReducedMotion ? false : "hidden"}
+                    animate={prefersReducedMotion ? {} : "visible"}
                     className="space-y-2"
                   >
                     {filteredGuests.map((guest) => (
@@ -808,7 +824,7 @@ export default function ReceptionPage({
                         key={guest.id}
                         variants={itemVariants}
                         layout
-                        exit="exit"
+                        exit={prefersReducedMotion ? {} : "exit"}
                       >
                         <button
                           onClick={() => togglePresence(guest)}
@@ -889,8 +905,8 @@ export default function ReceptionPage({
                           <div className="flex shrink-0 flex-col items-end gap-0.5">
                             {guest.is_present && guest.checked_in_at && (
                               <motion.span
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
+                                initial={prefersReducedMotion ? false : { opacity: 0 }}
+                                animate={prefersReducedMotion ? {} : { opacity: 1 }}
                                 className="flex items-center gap-1 text-xs text-green-600"
                               >
                                 <Check className="size-3" />
@@ -916,12 +932,12 @@ export default function ReceptionPage({
                 ) : (
                   <motion.div
                     key="empty"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={prefersReducedMotion ? false : { opacity: 0, y: 10 }}
+                    animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
                     className="rounded-xl border-2 border-dashed border-border bg-white p-8 text-center"
                   >
                     <motion.div
-                      animate={{ y: [0, -6, 0] }}
+                      animate={prefersReducedMotion ? {} : { y: [0, -6, 0] }}
                       transition={{
                         repeat: Infinity,
                         duration: 3,
@@ -940,7 +956,7 @@ export default function ReceptionPage({
                     {search && (
                       <Button
                         size="sm"
-                        className="mt-3 bg-gold text-white hover:bg-gold/90"
+                        className="mt-3 bg-gold text-deep-black hover:bg-gold/90"
                         onClick={() => setWalkinModal(true)}
                       >
                         <UserPlus className="mr-1.5 size-4" />
@@ -969,8 +985,8 @@ export default function ReceptionPage({
             {viewMode === "groups" && (
               <motion.div
                 variants={containerVariants}
-                initial="hidden"
-                animate="visible"
+                initial={prefersReducedMotion ? false : "hidden"}
+                animate={prefersReducedMotion ? {} : "visible"}
                 className="space-y-4"
               >
                 {groupedView.groups.length > 0 ? (
@@ -997,10 +1013,10 @@ export default function ReceptionPage({
                             </span>
                           </div>
                           {!allPresent && (
-                            <motion.div whileTap={{ scale: 0.95 }}>
+                            <motion.div whileTap={prefersReducedMotion ? {} : { scale: 0.95 }}>
                               <Button
                                 size="sm"
-                                className="bg-gold text-white hover:bg-gold/90"
+                                className="bg-gold text-deep-black hover:bg-gold/90"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   checkinGroup(
@@ -1015,8 +1031,8 @@ export default function ReceptionPage({
                           )}
                           {allPresent && (
                             <motion.span
-                              initial={{ scale: 0 }}
-                              animate={{ scale: 1 }}
+                              initial={prefersReducedMotion ? false : { scale: 0 }}
+                              animate={prefersReducedMotion ? {} : { scale: 1 }}
                               className="flex items-center gap-1 text-sm text-green-600"
                             >
                               <Check className="size-4" />
@@ -1029,7 +1045,7 @@ export default function ReceptionPage({
                           {group.members.map((member) => (
                             <motion.div
                               key={member.id}
-                              whileTap={{ scale: 0.99 }}
+                              whileTap={prefersReducedMotion ? {} : { scale: 0.99 }}
                             >
                               <button
                                 onClick={() => togglePresence(member)}
@@ -1082,12 +1098,12 @@ export default function ReceptionPage({
                   })
                 ) : (
                   <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={prefersReducedMotion ? false : { opacity: 0, y: 10 }}
+                    animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
                     className="rounded-xl border-2 border-dashed border-border bg-white p-8 text-center"
                   >
                     <motion.div
-                      animate={{ y: [0, -4, 0] }}
+                      animate={prefersReducedMotion ? {} : { y: [0, -4, 0] }}
                       transition={{
                         repeat: Infinity,
                         duration: 3,
@@ -1110,8 +1126,8 @@ export default function ReceptionPage({
                     </p>
                     <motion.div
                       variants={containerVariants}
-                      initial="hidden"
-                      animate="visible"
+                      initial={prefersReducedMotion ? false : "hidden"}
+                      animate={prefersReducedMotion ? {} : "visible"}
                       className="space-y-2"
                     >
                       {groupedView.solos.map((guest) => (
@@ -1220,7 +1236,7 @@ export default function ReceptionPage({
                             <motion.div
                               initial={{ width: 0 }}
                               animate={{ width: `${fillPct}%` }}
-                              transition={{ duration: 0.4 }}
+                              transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.4 }}
                               className={cn(
                                 "h-full rounded-full transition-colors",
                                 fillPct >= 100
@@ -1246,9 +1262,9 @@ export default function ReceptionPage({
       <div className="fixed bottom-6 right-6 z-50 sm:hidden">
         <motion.button
           onClick={() => setWalkinModal(true)}
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.92 }}
-          animate={{
+          whileHover={prefersReducedMotion ? {} : { scale: 1.08 }}
+          whileTap={prefersReducedMotion ? {} : { scale: 0.92 }}
+          animate={prefersReducedMotion ? {} : {
             boxShadow: [
               "0 4px 14px rgba(201, 169, 110, 0.3)",
               "0 4px 24px rgba(201, 169, 110, 0.5)",
@@ -1256,7 +1272,7 @@ export default function ReceptionPage({
             ],
           }}
           transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-          className="relative flex size-14 items-center justify-center rounded-full bg-gold text-white shadow-lg shadow-gold/30"
+          className="relative flex size-14 items-center justify-center rounded-full bg-gold text-deep-black shadow-lg shadow-gold/30"
           aria-label="Ajouter un invité imprévu (raccourci: N)"
         >
           <UserPlus className="size-7" />
@@ -1279,27 +1295,33 @@ export default function ReceptionPage({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <form onSubmit={addWalkin} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="wi-first">Prénom *</Label>
                 <Input
                   id="wi-first"
-                  value={wiFirstName}
-                  onChange={(e) => setWiFirstName(e.target.value)}
+                  {...register("first_name")}
                   placeholder="Prénom"
                   className="focus-visible:ring-2 focus-visible:ring-gold"
+                  aria-invalid={!!wiErrors.first_name}
                 />
+                {wiErrors.first_name && (
+                  <p className="text-xs text-destructive">{wiErrors.first_name.message}</p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="wi-last">Nom *</Label>
                 <Input
                   id="wi-last"
-                  value={wiLastName}
-                  onChange={(e) => setWiLastName(e.target.value)}
+                  {...register("last_name")}
                   placeholder="Nom"
                   className="focus-visible:ring-2 focus-visible:ring-gold"
+                  aria-invalid={!!wiErrors.last_name}
                 />
+                {wiErrors.last_name && (
+                  <p className="text-xs text-destructive">{wiErrors.last_name.message}</p>
+                )}
               </div>
             </div>
 
@@ -1307,8 +1329,7 @@ export default function ReceptionPage({
               <Label htmlFor="wi-cat">Catégorie</Label>
               <Input
                 id="wi-cat"
-                value={wiCategory}
-                onChange={(e) => setWiCategory(e.target.value)}
+                {...register("category")}
                 className="focus-visible:ring-2 focus-visible:ring-gold"
               />
             </div>
@@ -1317,10 +1338,7 @@ export default function ReceptionPage({
               <Label htmlFor="wi-age">Tranche d&rsquo;âge</Label>
               <select
                 id="wi-age"
-                value={wiAgeType}
-                onChange={(e) =>
-                  setWiAgeType(e.target.value as "adult" | "child" | "baby")
-                }
+                {...register("age_type")}
                 className="h-11 w-full rounded-lg border border-input bg-transparent px-3 text-sm focus-visible:ring-2 focus-visible:ring-gold focus-visible:outline-none"
               >
                 <option value="adult">Adulte</option>
@@ -1333,8 +1351,7 @@ export default function ReceptionPage({
               <Label htmlFor="wi-table">Table attribuée</Label>
               <select
                 id="wi-table"
-                value={wiTableId}
-                onChange={(e) => setWiTableId(e.target.value)}
+                {...register("table_id")}
                 className="h-11 w-full rounded-lg border border-input bg-transparent px-3 text-sm focus-visible:ring-2 focus-visible:ring-gold focus-visible:outline-none"
               >
                 <option value="none">Non placé</option>
@@ -1350,29 +1367,27 @@ export default function ReceptionPage({
 
             <div className="space-y-1.5">
               <Label htmlFor="wi-notes">Notes (allergies, etc.)</Label>
-              <textarea
+              <Textarea
                 id="wi-notes"
                 rows={2}
-                value={wiNotes}
-                onChange={(e) => setWiNotes(e.target.value)}
-                className="h-auto w-full min-w-0 rounded-lg border border-input bg-transparent px-3 py-2 text-base outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-gold md:text-sm"
+                {...register("notes")}
                 placeholder="Allergies, régime..."
               />
             </div>
-          </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setWalkinModal(false)}>
-              Annuler
-            </Button>
-            <Button
-              onClick={addWalkin}
-              disabled={wiSaving || !wiFirstName.trim() || !wiLastName.trim()}
-              className="bg-gold text-white hover:bg-gold/90"
-            >
-              {wiSaving ? "Ajout..." : "Ajouter et marquer présent"}
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setWalkinModal(false)}>
+                Annuler
+              </Button>
+              <Button
+                type="submit"
+                disabled={wiSaving}
+                className="bg-gold text-deep-black hover:bg-gold/90"
+              >
+                {wiSaving ? "Ajout..." : "Ajouter et marquer présent"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
@@ -1397,6 +1412,7 @@ function StatPanel({
   unassignedCount: number;
   pendingActions: number;
 }) {
+  const prefersReducedMotion = useReducedMotion();
   const items = [
     {
       label: "Taux de présence",
@@ -1439,8 +1455,8 @@ function StatPanel({
       <div className="space-y-3">
         {/* Compteur principal */}
         <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
+          initial={prefersReducedMotion ? false : { scale: 0.9, opacity: 0 }}
+          animate={prefersReducedMotion ? {} : { scale: 1, opacity: 1 }}
           transition={{ type: "spring" as const, stiffness: 200, damping: 20 }}
           className="text-center"
         >
@@ -1467,8 +1483,8 @@ function StatPanel({
                 strokeWidth="5"
                 strokeLinecap="round"
                 strokeDasharray={`${2 * Math.PI * 34}`}
-                initial={{ strokeDashoffset: 2 * Math.PI * 34 }}
-                animate={{
+                initial={prefersReducedMotion ? false : { strokeDashoffset: 2 * Math.PI * 34 }}
+                animate={prefersReducedMotion ? {} : {
                   strokeDashoffset:
                     2 * Math.PI * 34 * (1 - progressPercent / 100),
                 }}
@@ -1508,3 +1524,4 @@ function StatPanel({
     </div>
   );
 }
+

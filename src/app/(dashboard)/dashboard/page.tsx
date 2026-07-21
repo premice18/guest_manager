@@ -164,7 +164,7 @@ export default async function DashboardPage() {
           <Link href="/dashboard/create">
             <Button
               size="sm"
-              className="bg-gold text-white shadow-sm transition-all duration-200 hover:bg-gold/90 hover:shadow-md active:scale-[0.97]"
+              className="bg-gold text-deep-black shadow-sm transition-all duration-200 hover:bg-gold/90 hover:shadow-md active:scale-[0.97]"
             >
               <Plus className="mr-1.5 size-4" />
               Nouvel événement
@@ -197,7 +197,7 @@ export default async function DashboardPage() {
                       >
                         <span className="relative flex size-2">
                           {status.label === "Bientôt" && (
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gold opacity-75" />
+                            <span className="absolute inline-flex h-full w-full rounded-full bg-gold opacity-75" />
                           )}
                           <span
                             className={`relative inline-flex size-2 rounded-full ${style.dot}`}
@@ -245,7 +245,7 @@ export default async function DashboardPage() {
             <Link href="/dashboard/create" className="mt-6 inline-block">
               <Button
                 size="lg"
-                className="bg-gold text-white shadow-sm transition-all duration-200 hover:bg-gold/90 hover:shadow-md active:scale-[0.97]"
+                className="bg-gold text-deep-black shadow-sm transition-all duration-200 hover:bg-gold/90 hover:shadow-md active:scale-[0.97]"
               >
                 <Plus className="mr-2 size-5" />
                 Créer un événement
