@@ -3,9 +3,12 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
+import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Card,
@@ -24,17 +27,15 @@ import {
 import { toast } from "sonner";
 import {
   ArrowLeft,
-  User,
+  User as UserIcon,
   Shield,
   Settings,
-  Calendar,
   Camera,
   Loader2,
   Save,
   LogOut,
   Eye,
   EyeOff,
-  CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -56,7 +57,7 @@ export default function ProfilePage() {
   const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ProfileTab>("profile");
   const [saving, setSaving] = useState(false);
@@ -96,59 +97,63 @@ export default function ProfilePage() {
   // Modale déconnexion multi-appareils
   const [logoutAllOpen, setLogoutAllOpen] = useState(false);
 
-  const loadProfile = useCallback(async () => {
-    const { data: { user: u } } = await supabase.auth.getUser();
-    if (!u) {
-      router.push("/login");
-      return;
-    }
-    setUser(u);
-    setEmail(u.email ?? "");
-
-    // Tente de charger le profil depuis la table users ou public.profiles
-    // (optionnel, dépend si une table profile a été créée)
-    const { data: meta } = await supabase
-      .from("events")
-      .select("id")
-      .eq("owner_id", u.id)
-      .limit(1);
-    if (meta) {
-      const { count: evCount } = await supabase
-        .from("events")
-        .select("*", { count: "exact", head: true })
-        .eq("owner_id", u.id);
-      setEventCount(evCount ?? 0);
-
-      const { count: gCount } = await supabase
-        .from("guests")
-        .select("*", { count: "exact", head: true });
-
-      // Tentative de récupération des infos depuis user_metadata
-      setFirstName(u.user_metadata?.first_name ?? "");
-      setLastName(u.user_metadata?.last_name ?? "");
-      setPhone(u.user_metadata?.phone ?? "");
-      setRole(u.user_metadata?.role ?? "");
-      setBio(u.user_metadata?.bio ?? "");
-      setTheme(u.user_metadata?.theme ?? "light");
-      setNotifications(u.user_metadata?.notifications ?? true);
-      setLanguage(u.user_metadata?.language ?? "fr");
-
-      // Avatar depuis Supabase Storage
-      const { data: avatarData } = supabase.storage
-        .from("avatars")
-        .getPublicUrl(`${u.id}/profile.jpg`);
-      setAvatarUrl(avatarData?.publicUrl ?? null);
-      setGuestCount(gCount ?? 0);
-
-      // Dernière connexion
-      setLastLogin(u.last_sign_in_at ?? null);
-    }
-    setLoading(false);
-  }, [supabase, router]);
-
+  // Charge les données du profil utilisateur au montage
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadProfile() {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      if (!u || cancelled) {
+        if (!u) router.push("/login");
+        return;
+      }
+      setUser(u);
+      setEmail(u.email ?? "");
+
+      // Tente de charger le profil depuis la table users ou public.profiles
+      // (optionnel, dépend si une table profile a été créée)
+      const { data: meta } = await supabase
+        .from("events")
+        .select("id")
+        .eq("owner_id", u.id)
+        .limit(1);
+      if (meta) {
+        const { count: evCount } = await supabase
+          .from("events")
+          .select("*", { count: "exact", head: true })
+          .eq("owner_id", u.id);
+        setEventCount(evCount ?? 0);
+
+        const { count: gCount } = await supabase
+          .from("guests")
+          .select("*", { count: "exact", head: true });
+
+        // Tentative de récupération des infos depuis user_metadata
+        setFirstName(u.user_metadata?.first_name ?? "");
+        setLastName(u.user_metadata?.last_name ?? "");
+        setPhone(u.user_metadata?.phone ?? "");
+        setRole(u.user_metadata?.role ?? "");
+        setBio(u.user_metadata?.bio ?? "");
+        setTheme(u.user_metadata?.theme ?? "light");
+        setNotifications(u.user_metadata?.notifications ?? true);
+        setLanguage(u.user_metadata?.language ?? "fr");
+
+        // Avatar depuis Supabase Storage
+        const { data: avatarData } = supabase.storage
+          .from("avatars")
+          .getPublicUrl(`${u.id}/profile.jpg`);
+        setAvatarUrl(avatarData?.publicUrl ?? null);
+        setGuestCount(gCount ?? 0);
+
+        // Dernière connexion
+        setLastLogin(u.last_sign_in_at ?? null);
+      }
+      if (!cancelled) setLoading(false);
+    }
+
     loadProfile();
-  }, [loadProfile]);
+    return () => { cancelled = true; };
+  }, [supabase, router]);
 
   // Upload de l'avatar
   const uploadAvatar = async () => {
@@ -270,8 +275,8 @@ export default function ProfilePage() {
     );
   }
 
-  const tabs: { key: ProfileTab; label: string; icon: typeof User }[] = [
-    { key: "profile", label: "Profil", icon: User },
+  const tabs: { key: ProfileTab; label: string; icon: typeof UserIcon }[] = [
+    { key: "profile", label: "Profil", icon: UserIcon },
     { key: "security", label: "Sécurité", icon: Shield },
     { key: "preferences", label: "Préférences", icon: Settings },
   ];
@@ -356,16 +361,22 @@ export default function ProfilePage() {
                       }}
                     >
                       {avatarPreview ? (
-                        <img
+                        <Image
                           src={avatarPreview}
                           alt="Aperçu"
+                          width={112}
+                          height={112}
                           className="size-28 rounded-full object-cover"
+                          unoptimized
                         />
                       ) : avatarUrl ? (
-                        <img
+                        <Image
                           src={avatarUrl}
                           alt="Photo de profil"
+                          width={112}
+                          height={112}
                           className="size-28 rounded-full object-cover"
+                          unoptimized
                         />
                       ) : (
                         (firstName?.[0] ?? email?.[0] ?? "?").toUpperCase()
@@ -373,10 +384,15 @@ export default function ProfilePage() {
                     </div>
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition-opacity group-hover:opacity-100"
+                      disabled={uploading}
+                      className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-100 disabled:cursor-not-allowed"
                       aria-label="Modifier la photo"
                     >
-                      <Camera className="size-8 text-white" />
+                      {uploading ? (
+                        <Loader2 className="size-6 animate-spin text-white" />
+                      ) : (
+                        <Camera className="size-8 text-white" />
+                      )}
                     </button>
                     <input
                       ref={fileInputRef}
@@ -420,7 +436,7 @@ export default function ProfilePage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <User className="size-5 text-gold" />
+                    <UserIcon className="size-5 text-gold" />
                     Informations personnelles
                   </CardTitle>
                 </CardHeader>
@@ -466,12 +482,11 @@ export default function ProfilePage() {
                     </div>
                     <div className="space-y-1.5 sm:col-span-2">
                       <Label htmlFor="bio">Bio / Présentation</Label>
-                      <textarea
+                      <Textarea
                         id="bio"
                         rows={3}
                         value={bio}
                         onChange={(e) => setBio(e.target.value)}
-                        className="h-auto w-full min-w-0 rounded-lg border border-input bg-transparent px-3 py-2 text-base outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm"
                         placeholder="Quelques mots sur vous..."
                       />
                     </div>
@@ -480,7 +495,7 @@ export default function ProfilePage() {
                     <Button
                       onClick={saveProfile}
                       disabled={saving}
-                      className="bg-gold text-white hover:bg-gold/90"
+                      className="bg-gold text-deep-black hover:bg-gold/90"
                     >
                       {saving ? (
                         <Loader2 className="mr-2 size-4 animate-spin" />
@@ -559,7 +574,7 @@ export default function ProfilePage() {
                     <Button
                       onClick={changePassword}
                       disabled={changingPassword || !oldPassword || !newPassword || !confirmPassword}
-                      className="bg-gold text-white hover:bg-gold/90"
+                      className="bg-gold text-deep-black hover:bg-gold/90"
                     >
                       {changingPassword ? (
                         <Loader2 className="mr-2 size-4 animate-spin" />
@@ -658,7 +673,7 @@ export default function ProfilePage() {
                   <Button
                     onClick={saveProfile}
                     disabled={saving}
-                    className="bg-gold text-white hover:bg-gold/90"
+                    className="bg-gold text-deep-black hover:bg-gold/90"
                   >
                     {saving ? (
                       <Loader2 className="mr-2 size-4 animate-spin" />

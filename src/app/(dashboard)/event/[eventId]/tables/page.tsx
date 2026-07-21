@@ -40,7 +40,7 @@ import {
   GripVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 type Table = Database["public"]["Tables"]["tables"]["Row"];
 type Zone = Database["public"]["Tables"]["zones"]["Row"];
@@ -83,6 +83,7 @@ export default function TablesPage({
 }: {
   params: Promise<{ eventId: string }>;
 }) {
+  const prefersReducedMotion = useReducedMotion();
   const router = useRouter();
   const [eventId, setEventId] = useState("");
   const supabase = createClient();
@@ -293,13 +294,13 @@ export default function TablesPage({
       </Link>
 
       <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={prefersReducedMotion ? false : { opacity: 0, y: 16 }}
+        animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
         transition={{ type: "spring" as const, stiffness: 200, damping: 24 }}
         className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <h1 className="font-serif text-3xl text-deep-black">Tables</h1>
-        <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+        <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
           <Button onClick={() => openModal()}>
             <Plus className="mr-1.5 size-4" />
             Ajouter une table
@@ -309,8 +310,8 @@ export default function TablesPage({
 
       {/* Filtres */}
       <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={prefersReducedMotion ? false : { opacity: 0, y: 10 }}
+        animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
         transition={{ delay: 0.05 }}
         className="mb-6 flex flex-col gap-3 sm:flex-row"
       >
@@ -338,8 +339,8 @@ export default function TablesPage({
       {filteredTables.length > 0 ? (
         <motion.div
           variants={cardContainerVariants}
-          initial="hidden"
-          animate="visible"
+          initial={prefersReducedMotion ? false : "hidden"}
+          animate={prefersReducedMotion ? {} : "visible"}
           className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
         >
           {filteredTables.map((table, index) => {
@@ -360,7 +361,7 @@ export default function TablesPage({
                         {table.is_locked && (
                           <motion.div
                             initial={{ rotate: 0 }}
-                            animate={{ rotate: table.is_locked ? [0, -10, 10, -5, 0] : 0 }}
+                            animate={prefersReducedMotion ? {} : { rotate: table.is_locked ? [0, -10, 10, -5, 0] : 0 }}
                             transition={{ duration: 0.4 }}
                           >
                             <Lock className="size-4 text-muted-foreground" />
@@ -369,22 +370,24 @@ export default function TablesPage({
                         {table.name}
                       </CardTitle>
                       <div className="flex gap-0.5">
-                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                        <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.1 }} whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}>
                           <Button
                             variant="ghost"
                             size="icon"
                             className="size-7"
+                            aria-label="Déplacer vers le haut"
                             onClick={() => moveTable(index, -1)}
                             disabled={index === 0}
                           >
                             <GripVertical className="size-4 rotate-90" />
                           </Button>
                         </motion.div>
-                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                        <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.1 }} whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}>
                           <Button
                             variant="ghost"
                             size="icon"
                             className="size-7"
+                            aria-label="Déplacer vers le bas"
                             onClick={() => moveTable(index, 1)}
                             disabled={index === tables.length - 1}
                           >
@@ -421,7 +424,7 @@ export default function TablesPage({
                         <motion.div
                           initial={{ width: 0 }}
                           animate={{ width: `${fillPercent}%` }}
-                          transition={{ duration: 0.6, ease: "easeOut", type: "spring" as const, stiffness: 100 }}
+                          transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.6, ease: "easeOut", type: "spring" as const, stiffness: 100 }}
                           className={cn("h-full rounded-full", getFillColor(table.guest_count, table.capacity))}
                         />
                       </div>
@@ -429,7 +432,7 @@ export default function TablesPage({
 
                     {/* Actions */}
                     <div className="flex gap-2">
-                      <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="flex-1">
+                      <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }} className="flex-1">
                         <Button
                           variant="outline"
                           size="sm"
@@ -440,7 +443,7 @@ export default function TablesPage({
                           Modifier
                         </Button>
                       </motion.div>
-                      <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.9 }}>
+                      <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.05 }} whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}>
                         <Button
                           variant="outline"
                           size="sm"
@@ -449,15 +452,15 @@ export default function TablesPage({
                         >
                           <motion.span
                             key={table.is_locked ? "unlock" : "lock"}
-                            initial={{ rotate: -90, opacity: 0 }}
-                            animate={{ rotate: 0, opacity: 1 }}
+                            initial={prefersReducedMotion ? false : { rotate: -90, opacity: 0 }}
+                            animate={prefersReducedMotion ? {} : { rotate: 0, opacity: 1 }}
                             transition={{ duration: 0.2 }}
                           >
                             {table.is_locked ? <Unlock className="size-3.5" /> : <Lock className="size-3.5" />}
                           </motion.span>
                         </Button>
                       </motion.div>
-                      <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.9 }}>
+                      <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.05 }} whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}>
                         <Button
                           variant="outline"
                           size="sm"
@@ -476,13 +479,13 @@ export default function TablesPage({
         </motion.div>
       ) : (
         <motion.div
-          initial={{ opacity: 0, scale: 0.97 }}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.97 }}
+          animate={prefersReducedMotion ? {} : { opacity: 1, scale: 1 }}
           transition={{ type: "spring" as const, stiffness: 200, damping: 24 }}
           className="rounded-xl border-2 border-dashed border-border bg-white p-12 text-center"
         >
           <motion.div
-            animate={{ y: [0, -6, 0] }}
+            animate={prefersReducedMotion ? {} : { y: [0, -6, 0] }}
             transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
           >
             <svg className="mx-auto mb-4 size-12 text-muted-foreground/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -504,8 +507,8 @@ export default function TablesPage({
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent>
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, y: 10 }}
+            animate={prefersReducedMotion ? {} : { opacity: 1, scale: 1, y: 0 }}
             transition={{ type: "spring" as const, stiffness: 260, damping: 24 }}
           >
             <DialogHeader>
@@ -583,16 +586,16 @@ export default function TablesPage({
             </div>
 
             <DialogFooter>
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+              <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                 <Button variant="outline" onClick={() => setModalOpen(false)}>
                   Annuler
                 </Button>
               </motion.div>
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+              <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                 <Button
                   onClick={saveTable}
                   disabled={saving || !formName.trim()}
-                  className="bg-gold text-white hover:bg-gold/90"
+                  className="bg-gold text-deep-black hover:bg-gold/90"
                 >
                   {saving ? "Sauvegarde..." : editingTable ? "Enregistrer" : "Créer"}
                 </Button>
@@ -604,3 +607,4 @@ export default function TablesPage({
     </main>
   );
 }
+

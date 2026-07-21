@@ -8,6 +8,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Card,
@@ -18,7 +19,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { toast } from "sonner";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { ArrowLeft, Sparkles } from "lucide-react";
 
 // Schéma de validation pour la création d'un événement
@@ -57,6 +58,7 @@ const itemVariants = {
 
 // Formulaire de création d'un nouvel événement
 export default function CreateEventPage() {
+  const prefersReducedMotion = useReducedMotion();
   const router = useRouter();
   const supabase = createClient();
 
@@ -112,8 +114,8 @@ export default function CreateEventPage() {
 
   return (
     <motion.main
-      initial="hidden"
-      animate="visible"
+      initial={prefersReducedMotion ? false : "hidden"}
+      animate={prefersReducedMotion ? {} : "visible"}
       variants={containerVariants}
       className="mx-auto max-w-lg px-4 py-8 sm:px-6"
     >
@@ -134,8 +136,8 @@ export default function CreateEventPage() {
           <CardHeader>
             {/* Icône décorative */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
+              initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.8 }}
+              animate={prefersReducedMotion ? {} : { opacity: 1, scale: 1 }}
               transition={{
                 type: "spring" as const,
                 stiffness: 200,
@@ -168,19 +170,19 @@ export default function CreateEventPage() {
                 />
                 <AnimatePresence>
                   {errors.name && (
-                    <motion.p
-                      key="name-error"
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{
-                        opacity: 1,
-                        x: [0, -8, 8, -8, 8, 0],
-                        transition: { duration: 0.4 },
-                      }}
-                      exit={{ opacity: 0, x: 10 }}
-                      className="text-sm text-destructive"
-                    >
-                      {errors.name.message}
-                    </motion.p>
+                  <motion.p
+                    key="name-error"
+                    initial={prefersReducedMotion ? false : { opacity: 0, x: -10 }}
+                    animate={prefersReducedMotion ? {} : {
+                      opacity: 1,
+                      x: [0, -8, 8, -8, 8, 0],
+                      transition: { duration: 0.4 },
+                    }}
+                    exit={prefersReducedMotion ? {} : { opacity: 0, x: 10 }}
+                    className="text-sm text-destructive"
+                  >
+                    {errors.name.message}
+                  </motion.p>
                   )}
                 </AnimatePresence>
               </motion.div>
@@ -197,19 +199,19 @@ export default function CreateEventPage() {
                 />
                 <AnimatePresence>
                   {errors.event_date && (
-                    <motion.p
-                      key="date-error"
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{
-                        opacity: 1,
-                        x: [0, -8, 8, -8, 8, 0],
-                        transition: { duration: 0.4 },
-                      }}
-                      exit={{ opacity: 0, x: 10 }}
-                      className="text-sm text-destructive"
-                    >
-                      {errors.event_date.message}
-                    </motion.p>
+                  <motion.p
+                    key="date-error"
+                    initial={prefersReducedMotion ? false : { opacity: 0, x: -10 }}
+                    animate={prefersReducedMotion ? {} : {
+                      opacity: 1,
+                      x: [0, -8, 8, -8, 8, 0],
+                      transition: { duration: 0.4 },
+                    }}
+                    exit={prefersReducedMotion ? {} : { opacity: 0, x: 10 }}
+                    className="text-sm text-destructive"
+                  >
+                    {errors.event_date.message}
+                  </motion.p>
                   )}
                 </AnimatePresence>
               </motion.div>
@@ -239,10 +241,9 @@ export default function CreateEventPage() {
                     {descriptionLength}/1000
                   </span>
                 </div>
-                <textarea
+                <Textarea
                   id="description"
                   rows={3}
-                  className="h-auto w-full min-w-0 rounded-lg border border-input bg-transparent px-3 py-2 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-gold md:text-sm"
                   placeholder="Quelques mots sur votre événement..."
                   {...register("description")}
                 />
@@ -251,8 +252,8 @@ export default function CreateEventPage() {
             <CardFooter className="flex justify-end gap-3 border-t border-border/50 bg-muted/30">
               <Link href="/dashboard">
                 <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  whileHover={prefersReducedMotion ? {} : { scale: 1.02 }}
+                  whileTap={prefersReducedMotion ? {} : { scale: 0.98 }}
                   className="inline-block"
                 >
                   <Button type="button" variant="outline">
@@ -261,13 +262,13 @@ export default function CreateEventPage() {
                 </motion.div>
               </Link>
               <motion.div
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={prefersReducedMotion ? {} : { scale: 1.02 }}
+                whileTap={prefersReducedMotion ? {} : { scale: 0.98 }}
                 className="inline-block"
               >
                 <Button
                   type="submit"
-                  className="bg-gold text-white shadow-sm transition-all duration-200 hover:bg-gold/90 hover:shadow-md"
+                  className="bg-gold text-deep-black shadow-sm transition-all duration-200 hover:bg-gold/90 hover:shadow-md"
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? "Création..." : "Créer l'événement"}

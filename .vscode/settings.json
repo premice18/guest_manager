@@ -1,0 +1,10 @@
+{
+  "css.customData": [".vscode/tailwind.css-data.json"],
+  "files.exclude": {
+    "public/next.svg": true,
+    "public/vercel.svg": true,
+    "public/globe.svg": true,
+    "public/file.svg": true,
+    "public/window.svg": true
+  }
+}
