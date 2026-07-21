@@ -1,6 +1,9 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth";
+import { getEventById } from "@/lib/dal/events";
+import { getGuestStats } from "@/lib/dal/guests";
+import { getTableCounts } from "@/lib/dal/tables";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -23,50 +26,26 @@ import {
   FileText,
 } from "lucide-react";
 
-// Page de détail d'un événement : onglets de navigation
 export default async function EventDetailPage({
   params,
 }: {
   params: Promise<{ eventId: string }>;
 }) {
   const { eventId } = await params;
-  const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  // Récupère les informations de l'événement
-  const { data: event } = await supabase
-    .from("events")
-    .select("*")
-    .eq("id", eventId)
-    .single();
-
+  let user;
+  try {
+    user = await requireUser();
+  } catch {
+    redirect("/login");
+  }
+  const event = await getEventById(eventId);
   if (!event) notFound();
 
-  // Récupère les statistiques pour la vue d'ensemble
-  const { count: totalGuests } = await supabase
-    .from("guests")
-    .select("*", { count: "exact", head: true })
-    .eq("event_id", eventId);
-
-  const { count: placedGuests } = await supabase
-    .from("guests")
-    .select("*", { count: "exact", head: true })
-    .eq("event_id", eventId)
-    .not("table_id", "is", null);
-
-  const { count: totalTables } = await supabase
-    .from("tables")
-    .select("*", { count: "exact", head: true })
-    .eq("event_id", eventId);
-
-  const { count: totalZones } = await supabase
-    .from("zones")
-    .select("*", { count: "exact", head: true })
-    .eq("event_id", eventId);
+  const [guestStats, tableCounts] = await Promise.all([
+    getGuestStats(eventId),
+    getTableCounts(eventId),
+  ]);
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -124,10 +103,10 @@ export default async function EventDetailPage({
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold text-deep-black">
-              {totalGuests ?? 0}
+              {guestStats.total}
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {placedGuests ?? 0} placés
+              {guestStats.placed} placés
             </p>
           </CardContent>
         </Card>
@@ -143,10 +122,10 @@ export default async function EventDetailPage({
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold text-deep-black">
-              {totalTables ?? 0}
+              {tableCounts.totalTables}
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              dans {totalZones ?? 0} zone{(totalZones ?? 0) !== 1 ? "s" : ""}
+              dans {tableCounts.totalZones} zone{tableCounts.totalZones !== 1 ? "s" : ""}
             </p>
           </CardContent>
         </Card>

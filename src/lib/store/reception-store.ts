@@ -2,6 +2,9 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { Database } from "@/types/database.types";
+
+type Guest = Database["public"]["Tables"]["guests"]["Row"];
 
 // File d'attente des actions de check-in effectuées hors-ligne
 interface PendingAction {
@@ -12,22 +15,18 @@ interface PendingAction {
 }
 
 interface ReceptionState {
-  // Invités chargés (cache local)
-  guests: Record<string, any>;
-  setGuests: (guests: any[]) => void;
-  updateGuest: (id: string, updates: Partial<any>) => void;
+  guests: Record<string, Guest>;
+  setGuests: (guests: Guest[]) => void;
+  updateGuest: (id: string, updates: Partial<Guest>) => void;
 
-  // File d'attente offline
   pendingActions: PendingAction[];
   addPendingAction: (action: PendingAction) => void;
   removePendingAction: (guestId: string) => void;
   clearPendingActions: () => void;
 
-  // Statut de connexion
   isOnline: boolean;
   setOnline: (online: boolean) => void;
 
-  // Compteurs en cache
   totalGuests: number;
   presentCount: number;
   setCounts: (total: number, present: number) => void;
@@ -45,14 +44,14 @@ export const useReceptionStore = create<ReceptionState>()(
 
       // Charge la liste complète des invités dans le cache local
       setGuests: (guests) => {
-        const map: Record<string, any> = {};
+        const map: Record<string, Guest> = {};
         for (const g of guests) {
           map[g.id] = g;
         }
         set({
           guests: map,
           totalGuests: guests.length,
-          presentCount: guests.filter((g: any) => g.is_present).length,
+          presentCount: guests.filter((g) => g.is_present).length,
         });
       },
 
@@ -62,7 +61,7 @@ export const useReceptionStore = create<ReceptionState>()(
         if (guests[id]) {
           guests[id] = { ...guests[id], ...updates };
         }
-        const allGuests = Object.values(guests) as any[];
+        const allGuests = Object.values(guests);
         set({
           guests,
           presentCount: allGuests.filter((g) => g.is_present).length,

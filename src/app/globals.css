@@ -105,6 +105,17 @@
   --radius-xl: 0.75rem;
   --radius-2xl: 1rem;
   --radius-3xl: 1.5rem;
+
+  --color-white: #ffffff;
+  --color-black: #000000;
+  --color-green-50: #f0fdf4;
+  --color-green-200: #bbf7d0;
+  --color-green-500: #22c55e;
+  --color-green-600: #16a34a;
+  --color-red-500: #ef4444;
+  --color-yellow-50: #fefce8;
+  --color-yellow-300: #fde047;
+  --color-amber-500: #f59e0b;
 }
 
 body {
