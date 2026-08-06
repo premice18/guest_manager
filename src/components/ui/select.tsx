@@ -5,33 +5,48 @@ import { cn } from "@/lib/utils";
 
 function Select({
   value,
+  onChange,
   onValueChange,
   children,
   placeholder,
+  className,
+  ...props
 }: {
-  value?: string;
-  onValueChange?: (value: string) => void;
   children: React.ReactNode;
   placeholder?: string;
-}) {
+  onValueChange?: (value: string) => void;
+} & React.ComponentProps<"select">) {
   const items = React.Children.toArray(children).filter(
-    (c: any) => c.type === SelectItem
+    (child): child is React.ReactElement =>
+      React.isValidElement(child) && child.type === SelectItem
   );
-  const selected = items.find((i: any) => i.props.value === value);
 
   return (
     <div className="relative">
       <select
-        value={value ?? ""}
-        onChange={(e) => onValueChange?.(e.target.value)}
-        className="h-11 w-full appearance-none rounded-lg border border-input bg-transparent px-3 pr-8 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        value={value}
+        onChange={(e) => {
+          onChange?.(e);
+          onValueChange?.(e.target.value);
+        }}
+        className={cn(
+          "h-11 w-full appearance-none rounded-lg border border-input bg-transparent px-3 pr-8 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold",
+          className
+        )}
+        {...props}
       >
         {placeholder && <option value="">{placeholder}</option>}
-        {items.map((item: any) => (
-          <option key={item.props.value} value={item.props.value}>
-            {item.props.children}
-          </option>
-        ))}
+        {items.map((item) => {
+          const itemProps = item.props as {
+            value?: string;
+            children?: React.ReactNode;
+          };
+          return (
+            <option key={itemProps.value} value={itemProps.value ?? ""}>
+              {itemProps.children}
+            </option>
+          );
+        })}
       </select>
       <svg
         className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"

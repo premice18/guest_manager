@@ -69,6 +69,14 @@ export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
   const [showPassword, setShowPassword] = useState(false);
+  // Route d'origine (fournie par le proxy) pour y revenir après connexion
+  const nextPath =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("next")
+      : null;
+  const redirectTo = nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//")
+    ? nextPath
+    : "/dashboard";
 
   const {
     register,
@@ -87,13 +95,17 @@ export default function LoginPage() {
       });
 
       if (error) {
-        toast.error(error.message);
+        // Message d'erreur convivial selon le type d'échec
+        const message = error.message.toLowerCase().includes("not confirmed")
+          ? "Votre email n'est pas confirmé. Vérifiez votre boîte de réception."
+          : "Email ou mot de passe incorrect.";
+        toast.error(message);
         return;
       }
 
-      router.push("/dashboard");
+      router.push(redirectTo);
       router.refresh();
-    } catch (err) {
+    } catch {
       // Capture les erreurs réseau inattendues
       toast.error("Une erreur est survenue lors de la connexion.");
     }
@@ -156,6 +168,7 @@ export default function LoginPage() {
                       id="email"
                       type="email"
                       placeholder="vous@exemple.com"
+                      autoComplete="email"
                       {...register("email")}
                       aria-invalid={!!errors.email}
                     />
@@ -175,12 +188,21 @@ export default function LoginPage() {
 
                   {/* Champ Mot de passe avec toggle de visibilité */}
                   <motion.div variants={fadeUp} className="space-y-2">
-                    <Label htmlFor="password">Mot de passe</Label>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="password">Mot de passe</Label>
+                      <Link
+                        href="/forgot-password"
+                        className="text-xs text-gold transition-colors hover:underline"
+                      >
+                        Mot de passe oublié ?
+                      </Link>
+                    </div>
                     <div className="relative">
                       <Input
                         id="password"
                         type={showPassword ? "text" : "password"}
                         placeholder="••••••••"
+                        autoComplete="current-password"
                         {...register("password")}
                         aria-invalid={!!errors.password}
                         className="pr-10"

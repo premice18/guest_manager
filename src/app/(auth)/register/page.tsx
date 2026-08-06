@@ -109,7 +109,7 @@ export default function RegisterPage() {
         "Compte créé ! Vérifiez votre email pour confirmer l'inscription.",
       );
       router.push("/login");
-    } catch (err) {
+    } catch {
       // Capture les erreurs réseau inattendues
       toast.error("Une erreur est survenue lors de l'inscription.");
     }

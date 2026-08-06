@@ -1,7 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { nanoid } from "nanoid";
 import { createClient } from "@/lib/supabase/client";
@@ -10,12 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import BulkAddModal from "./components/BulkAddModal";
+import { Select, SelectItem } from "@/components/ui/select";
 
 import {
   ArrowLeft,
@@ -36,8 +31,7 @@ import {
   Upload,
   Download,
   Users,
-  Table as TableIcon,
-  Filter,
+Table as TableIcon,
   X,
   Check,
   CircleUser,
@@ -95,17 +89,15 @@ export default function GuestsPage({
   params: Promise<{ eventId: string }>;
 }) {
   const prefersReducedMotion = useReducedMotion();
-  const router = useRouter();
   const [eventId, setEventId] = useState("");
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [guests, setGuests] = useState<GuestWithTable[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [filterPresent, setFilterPresent] = useState<string>("all");
-  const [filterCategory, setFilterCategory] = useState("");
+const [filterPresent, setFilterPresent] = useState<string>("all");
   const [filterAge, setFilterAge] = useState<string>("all");
   const [filterTableId, setFilterTableId] = useState("all");
   const [page, setPage] = useState(0);
@@ -142,14 +134,53 @@ export default function GuestsPage({
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
   const [importing, setImporting] = useState(false);
 
-  const loadData = useCallback(async () => {
-    const id = await params.then((p) => p.eventId);
-    setEventId(id);
+useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const id = await params.then((p) => p.eventId);
+      if (cancelled) return;
+      setEventId(id);
 
+      const { data: tbls } = await supabase
+        .from("tables")
+        .select("id, name, capacity")
+        .eq("event_id", id)
+        .order("name");
+      const rawTables = (tbls ?? []) as Table[];
+
+      const { data: gsts } = await supabase
+        .from("guests")
+        .select("*")
+        .eq("event_id", id)
+        .order("last_name")
+        .order("first_name");
+      const rawGuests = (gsts ?? []) as Guest[];
+
+      if (!cancelled) {
+        setTables(rawTables);
+        // Associe le nom de la table pour chaque invité
+        const tableMap = new Map(rawTables.map((t) => [t.id, t.name]));
+        setGuests(
+          rawGuests.map((g) => ({
+            ...g,
+            tables: g.table_id ? { name: tableMap.get(g.table_id) ?? "?" } : null,
+          }))
+        );
+        setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+}, [params, supabase]);
+
+  // Recharge les données après une mutation (ajout, suppression, groupe...)
+  const loadData = useCallback(async () => {
+    if (!eventId) return;
     const { data: tbls } = await supabase
       .from("tables")
       .select("id, name, capacity")
-      .eq("event_id", id)
+      .eq("event_id", eventId)
       .order("name");
     const rawTables = (tbls ?? []) as Table[];
     setTables(rawTables);
@@ -157,11 +188,10 @@ export default function GuestsPage({
     const { data: gsts } = await supabase
       .from("guests")
       .select("*")
-      .eq("event_id", id)
+      .eq("event_id", eventId)
       .order("last_name")
       .order("first_name");
     const rawGuests = (gsts ?? []) as Guest[];
-    // Associe le nom de la table pour chaque invité
     const tableMap = new Map(rawTables.map((t) => [t.id, t.name]));
     setGuests(
       rawGuests.map((g) => ({
@@ -169,12 +199,7 @@ export default function GuestsPage({
         tables: g.table_id ? { name: tableMap.get(g.table_id) ?? "?" } : null,
       }))
     );
-    setLoading(false);
-  }, [params, supabase]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  }, [supabase, eventId]);
 
   // Ouvre le modal pour créer/éditer un invité
   const openGuestModal = (guest?: Guest) => {
@@ -213,6 +238,46 @@ export default function GuestsPage({
       toast.error("Le prénom et le nom sont requis");
       return;
     }
+
+    const targetTableId = formTableId === "none" ? null : formTableId;
+    const groupId = formGroupId || (formGroupName.trim() ? nanoid() : null);
+
+    // Vérifie la capacité avant sauvegarde pour ne jamais dépasser les places d'une table
+    if (targetTableId) {
+      const targetTable = tables.find((t) => t.id === targetTableId);
+      if (targetTable && targetTable.is_locked && editingGuest?.table_id !== targetTableId) {
+        toast.error(`🔒 La table "${targetTable.name}" est verrouillée.`);
+        return;
+      }
+
+      if (targetTable && applyToGroup && groupId) {
+        const groupMembers = guests.filter((g) => g.group_id === groupId);
+        const alreadyOnTarget = groupMembers.filter(
+          (g) => g.table_id === targetTableId
+        ).length;
+        const placedOnTarget = guests.filter(
+          (g) => g.table_id === targetTableId
+        ).length;
+        const free = targetTable.capacity - placedOnTarget;
+        const needed = groupMembers.length - alreadyOnTarget;
+        if (needed > free) {
+          toast.error(
+            `⚠️ Le groupe (${groupMembers.length} pers.) ne tient pas sur "${targetTable.name}" (${free} place${free > 1 ? "s" : ""} libre${free > 1 ? "s" : ""}).`
+          );
+          return;
+        }
+      } else if (targetTable) {
+        const staying = editingGuest?.table_id === targetTableId;
+        const available = getTableAvailable(targetTableId);
+        if (!staying && available < 1) {
+          toast.error(
+            `⚠️ La table "${targetTable.name}" est complète (${targetTable.capacity} places).`
+          );
+          return;
+        }
+      }
+    }
+
     setSaving(true);
     try {
       const payload = {
@@ -223,7 +288,7 @@ export default function GuestsPage({
         age_type: formAgeType,
         table_id: formTableId === "none" ? null : formTableId,
         group_name: formGroupName.trim() || null,
-        group_id: formGroupId || (formGroupName.trim() ? nanoid() : null),
+        group_id: groupId,
         dietary_notes: formDietary.trim() || null,
         needs_accessibility: formAccessibility,
         notes: formNotes.trim() || null,
@@ -329,13 +394,24 @@ export default function GuestsPage({
     }
   };
 
-  // Calcule la capacité restante d'une table
+// Calcule la capacité restante d'une table
   const getTableAvailable = (tableId: string) => {
     const table = tables.find((t) => t.id === tableId);
     if (!table) return 0;
     const placed = guests.filter((g) => g.table_id === tableId).length;
     return table.capacity - placed;
   };
+
+  // Nombre d'invités placés par table (utilisé pour la validation de capacité dans le bulk add)
+  const tableCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const g of guests) {
+      if (g.table_id) {
+        counts[g.table_id] = (counts[g.table_id] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [guests]);
 
   // Filtres
   const filtered = guests.filter((g) => {
@@ -344,8 +420,7 @@ export default function GuestsPage({
       .toLowerCase()
       .includes(q)) return false;
     if (filterPresent === "present" && !g.is_present) return false;
-    if (filterPresent === "absent" && g.is_present) return false;
-    if (filterCategory && g.category !== filterCategory) return false;
+if (filterPresent === "absent" && g.is_present) return false;
     if (filterAge !== "all" && g.age_type !== filterAge) return false;
     if (filterTableId !== "all" && g.table_id !== filterTableId) return false;
     return true;
@@ -353,9 +428,6 @@ export default function GuestsPage({
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const pageGuests = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-
-  // Catégories uniques pour le filtre
-  const categories = [...new Set(guests.map((g) => g.category).filter(Boolean))];
 
   // Export CSV
   const exportCSV = () => {
@@ -409,20 +481,10 @@ export default function GuestsPage({
   };
 
   // Import CSV - envoi en base
-  const executeImport = async () => {
+const executeImport = async () => {
     setImporting(true);
     let success = 0;
     let errors = 0;
-    const fieldMap: Record<string, string> = {
-      first_name: "",
-      last_name: "",
-      category: "",
-      age_type: "",
-      group_name: "",
-      dietary_notes: "",
-      needs_accessibility: "",
-      notes: "",
-    };
 
     // Construit le mapping inverse
     const reverseMap: Record<string, string> = {};
@@ -450,8 +512,8 @@ export default function GuestsPage({
           event_id: eventId,
           first_name: firstName,
           last_name: lastName,
-          category: get("category") || null,
-          age_type: (get("age_type") as any) || "adult",
+category: get("category") || null,
+          age_type: (get("age_type") as "adult" | "child" | "baby") || "adult",
           group_name: get("group_name") || null,
           dietary_notes: get("dietary_notes") || null,
           notes: get("notes") || null,
@@ -553,36 +615,36 @@ export default function GuestsPage({
                   className="pl-9 focus-visible:ring-2 focus-visible:ring-gold"
                 />
               </div>
-              <select
+              <Select
                 value={filterPresent}
-                onChange={(e) => { setFilterPresent(e.target.value); setPage(0); }}
-                className="h-11 rounded-lg border border-input bg-transparent px-3 text-sm focus-visible:ring-2 focus-visible:ring-gold focus-visible:outline-none"
+                onValueChange={(v) => { setFilterPresent(v); setPage(0); }}
+                className="w-auto"
               >
-                <option value="all">Tous les statuts</option>
-                <option value="present">Présents</option>
-                <option value="absent">Absents</option>
-              </select>
-              <select
+                <SelectItem value="all">Tous les statuts</SelectItem>
+                <SelectItem value="present">Présents</SelectItem>
+                <SelectItem value="absent">Absents</SelectItem>
+              </Select>
+              <Select
                 value={filterAge}
-                onChange={(e) => { setFilterAge(e.target.value); setPage(0); }}
-                className="h-11 rounded-lg border border-input bg-transparent px-3 text-sm focus-visible:ring-2 focus-visible:ring-gold focus-visible:outline-none"
+                onValueChange={(v) => { setFilterAge(v); setPage(0); }}
+                className="w-auto"
               >
-                <option value="all">Tous les âges</option>
-                <option value="adult">Adultes</option>
-                <option value="child">Enfants</option>
-                <option value="baby">Bébés</option>
-              </select>
-              <select
+                <SelectItem value="all">Tous les âges</SelectItem>
+                <SelectItem value="adult">Adultes</SelectItem>
+                <SelectItem value="child">Enfants</SelectItem>
+                <SelectItem value="baby">Bébés</SelectItem>
+              </Select>
+              <Select
                 value={filterTableId}
-                onChange={(e) => { setFilterTableId(e.target.value); setPage(0); }}
-                className="h-11 rounded-lg border border-input bg-transparent px-3 text-sm focus-visible:ring-2 focus-visible:ring-gold focus-visible:outline-none"
+                onValueChange={(v) => { setFilterTableId(v); setPage(0); }}
+                className="w-auto"
               >
-                <option value="all">Toutes les tables</option>
-                <option value="none">Non placés</option>
+                <SelectItem value="all">Toutes les tables</SelectItem>
+                <SelectItem value="none">Non placés</SelectItem>
                 {tables.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
+                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                 ))}
-              </select>
+              </Select>
             </div>
           </CardContent>
         </Card>
@@ -868,35 +930,33 @@ initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, y: 10 }}
                 <Input id="guest-category" value={formCategory} onChange={(e) => setFormCategory(e.target.value)} placeholder="VIP, Famille..." className="focus-visible:ring-2 focus-visible:ring-gold" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="guest-age">Tranche d'âge</Label>
-                <select
+                <Label htmlFor="guest-age">Tranche d&apos;âge</Label>
+                <Select
                   id="guest-age"
                   value={formAgeType}
-                  onChange={(e) => setFormAgeType(e.target.value as any)}
-                  className="h-11 w-full rounded-lg border border-input bg-transparent px-3 text-sm focus-visible:ring-2 focus-visible:ring-gold focus-visible:outline-none"
+                  onValueChange={(v) => setFormAgeType(v as "adult" | "child" | "baby")}
                 >
-                  <option value="adult">Adulte</option>
-                  <option value="child">Enfant</option>
-                  <option value="baby">Bébé</option>
-                </select>
+                  <SelectItem value="adult">Adulte</SelectItem>
+                  <SelectItem value="child">Enfant</SelectItem>
+                  <SelectItem value="baby">Bébé</SelectItem>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="guest-table">Table attribuée</Label>
-                <select
+                <Select
                   id="guest-table"
                   value={formTableId}
-                  onChange={(e) => setFormTableId(e.target.value)}
-                  className="h-11 w-full rounded-lg border border-input bg-transparent px-3 text-sm focus-visible:ring-2 focus-visible:ring-gold focus-visible:outline-none"
+                  onValueChange={setFormTableId}
                 >
-                  <option value="none">Non placé</option>
+                  <SelectItem value="none">Non placé</SelectItem>
                   {tables
                     .filter((t) => !t.is_locked || editingGuest?.table_id === t.id)
                     .map((t) => (
-                      <option key={t.id} value={t.id}>
+                      <SelectItem key={t.id} value={t.id}>
                         {t.name} ({getTableAvailable(t.id)}/{t.capacity} places)
-                      </option>
+                      </SelectItem>
                     ))}
-                </select>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="guest-group">Groupe</Label>
@@ -1013,9 +1073,9 @@ initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, y: 10 }}
       <BulkAddModal
         open={bulkModalOpen}
         onOpenChange={setBulkModalOpen}
-        eventId={eventId}
+eventId={eventId}
         tables={tables}
-        guestsCount={guests.length}
+        tableCounts={tableCounts}
         onSuccess={loadData}
       />
 
@@ -1042,23 +1102,23 @@ initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, y: 10 }}
                 {csvHeaders.map((header) => (
                   <div key={header} className="flex items-center gap-3">
                     <span className="min-w-[120px] text-sm font-medium">{header}</span>
-                    <select
+                    <Select
                       value={columnMapping[header] ?? ""}
-                      onChange={(e) =>
-                        setColumnMapping((prev) => ({ ...prev, [header]: e.target.value }))
+                      onValueChange={(v) =>
+                        setColumnMapping((prev) => ({ ...prev, [header]: v }))
                       }
-                      className="h-10 flex-1 rounded-lg border border-input bg-transparent px-3 text-sm focus-visible:ring-2 focus-visible:ring-gold focus-visible:outline-none"
+                      className="h-10 flex-1 w-auto"
                     >
-                      <option value="">Ignorer</option>
-                      <option value="first_name">Prénom (obligatoire)</option>
-                      <option value="last_name">Nom (obligatoire)</option>
-                      <option value="category">Catégorie</option>
-                      <option value="age_type">Tranche d'âge</option>
-                      <option value="group_name">Groupe</option>
-                      <option value="dietary_notes">Notes alimentaires</option>
-                      <option value="needs_accessibility">Accessibilité</option>
-                      <option value="notes">Notes</option>
-                    </select>
+                      <SelectItem value="">Ignorer</SelectItem>
+                      <SelectItem value="first_name">Prénom (obligatoire)</SelectItem>
+                      <SelectItem value="last_name">Nom (obligatoire)</SelectItem>
+                      <SelectItem value="category">Catégorie</SelectItem>
+                      <SelectItem value="age_type">Tranche d&apos;âge</SelectItem>
+                      <SelectItem value="group_name">Groupe</SelectItem>
+                      <SelectItem value="dietary_notes">Notes alimentaires</SelectItem>
+                      <SelectItem value="needs_accessibility">Accessibilité</SelectItem>
+                      <SelectItem value="notes">Notes</SelectItem>
+                    </Select>
                   </div>
                 ))}
               </div>

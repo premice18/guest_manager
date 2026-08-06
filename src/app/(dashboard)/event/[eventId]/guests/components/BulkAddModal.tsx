@@ -10,7 +10,6 @@ import type { Database } from "@/types/database.types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -25,9 +24,9 @@ import {
   Plus,
   Copy,
   Upload,
-  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Select, SelectItem } from "@/components/ui/select";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 type Table = Database["public"]["Tables"]["tables"]["Row"];
@@ -38,6 +37,7 @@ interface BulkAddRow {
   lastName: string;
   type: "singleton" | "couple";
   tableId: string;
+  coupleKey: string | null; // clé partagée par les 2 membres d'un couple
 }
 
 interface BulkAddModalProps {
@@ -45,7 +45,7 @@ interface BulkAddModalProps {
   onOpenChange: (open: boolean) => void;
   eventId: string;
   tables: Table[];
-  guestsCount: number; // nombre d'invités déjà placés pour calcul des capacités
+  tableCounts?: Record<string, number>; // nombre d'invités placés par table
   onSuccess: () => void; // rappel pour rafraîchir la liste
 }
 
@@ -56,7 +56,15 @@ function localId(): string {
 
 // Crée 3 lignes vides par défaut
 function createEmptyRow(type: "singleton" | "couple" = "singleton"): BulkAddRow {
-  return { id: localId(), firstName: "", lastName: "", type, tableId: "" };
+  return {
+    id: localId(),
+    firstName: "",
+    lastName: "",
+    type,
+    tableId: "",
+    // Un couple partage une même clé pour relier explicitement ses 2 membres
+    coupleKey: type === "couple" ? localId() : null,
+  };
 }
 
 const INITIAL_ROWS = 3;
@@ -66,7 +74,7 @@ export default function BulkAddModal({
   onOpenChange,
   eventId,
   tables,
-  guestsCount,
+  tableCounts,
   onSuccess,
 }: BulkAddModalProps) {
   const prefersReducedMotion = useReducedMotion();
@@ -85,80 +93,85 @@ export default function BulkAddModal({
 
   // Compte combien d'invités sont placés par table pour calculer la capacité restante
   const guestCountByTable = useCallback(
-    (tableId: string) => guestsCount, // approximation simple : on utilise le total
-    [guestsCount]
+    (tableId: string) => (tableCounts ? tableCounts[tableId] ?? 0 : 0),
+    [tableCounts]
   );
 
-  // Capacité restante d'une table
-  const getTableAvailable = (tableId: string) => {
-    const table = tables.find((t) => t.id === tableId);
-    if (!table) return 0;
-    // On ne peut pas compter en temps réel ici sans recharger, mais on valide au moment de l'insert
-    return table.capacity;
-  };
+  // Capacité restante d'une table (capacité - invités déjà placés)
 
   // Ajoute une ligne vide
   const addRow = (type: "singleton" | "couple" = "singleton") => {
     setRows((prev) => [...prev, createEmptyRow(type)]);
   };
 
-  // Supprime une ligne
+  // Supprime une ligne (et sa ligne partenaire si c'est un couple)
   const removeRow = (id: string) => {
-    setRows((prev) => prev.filter((r) => r.id !== id));
+    setRows((prev) => {
+      const target = prev.find((r) => r.id === id);
+      if (target?.type === "couple" && target.coupleKey) {
+        // Retire également le conjoint lié par la même coupleKey
+        return prev.filter(
+          (r) => r.id !== id && !(r.coupleKey === target.coupleKey && r.id !== id)
+        );
+      }
+      return prev.filter((r) => r.id !== id);
+    });
   };
 
   // Duplique une ligne
   const duplicateRow = (row: BulkAddRow) => {
     setRows((prev) => [
       ...prev,
-      { ...row, id: localId(), firstName: row.firstName, lastName: row.lastName },
+      { ...row, id: localId(), firstName: row.firstName, lastName: row.lastName, coupleKey: null },
     ]);
   };
 
   // Met à jour un champ d'une ligne
   const updateRow = (id: string, field: keyof BulkAddRow, value: string) => {
-    setRows((prev) =>
-      prev.map((r) => {
-        if (r.id !== id) return r;
-        const updated = { ...r, [field]: value };
+    setRows((prev) => {
+      const index = prev.findIndex((r) => r.id === id);
+      if (index === -1) return prev;
+      const updated = { ...prev[index], [field]: value };
 
-        // Si on change le type en "couple", on ajoute automatiquement une ligne partenaire
-        if (field === "type" && value === "couple" && r.type !== "couple") {
-          // Ajoute une ligne partenaire juste après
-          const partnerRow = createEmptyRow("couple");
-          // On marque la ligne partenaire avec group_id implicite via l'index
-          const idx = prev.indexOf(r);
-          const newRows = [...prev];
-          newRows.splice(idx + 1, 0, {
-            ...partnerRow,
-            firstName: "",
-            lastName: "",
-          });
-          return updated;
-        }
+      // Si on change le type en "couple", on ajoute automatiquement une ligne partenaire
+      if (field === "type" && value === "couple" && prev[index].type !== "couple") {
+        const coupleKey = localId();
+        const updatedRow = { ...updated, coupleKey };
+        const partnerRow: BulkAddRow = {
+          ...createEmptyRow("couple"),
+          coupleKey,
+        };
+        const newRows = [...prev];
+        newRows[index] = updatedRow;
+        newRows.splice(index + 1, 0, partnerRow);
+        return newRows;
+      }
 
-        return updated;
-      })
-    );
+      // Si on revient à "singleton", on retire le lien de couple
+      if (field === "type" && value === "singleton" && prev[index].type === "couple") {
+        return prev.map((r, i) =>
+          i === index ? { ...r, coupleKey: null } : r
+        );
+      }
+
+      const newRows = [...prev];
+      newRows[index] = updated;
+      return newRows;
+    });
   };
 
-  // Récupère les lignes partenaires pour les couples
+// Récupère les couples (groupes de lignes partageant la même coupleKey)
   const getCoupleGroups = (): BulkAddRow[][] => {
     const groups: BulkAddRow[][] = [];
     const visited = new Set<string>();
 
-    for (let i = 0; i < rows.length; i++) {
-      if (rows[i].type !== "couple" || visited.has(rows[i].id)) continue;
-      const pair = [rows[i]];
-      visited.add(rows[i].id);
-
-      // Cherche la ligne partenaire adjacente (prochaine ligne "couple" si elle existe)
-      if (i + 1 < rows.length && rows[i + 1].type === "couple") {
-        pair.push(rows[i + 1]);
-        visited.add(rows[i + 1].id);
-      }
-
-      groups.push(pair);
+    for (const row of rows) {
+      if (row.type !== "couple" || !row.coupleKey || visited.has(row.id)) continue;
+      const members = rows.filter(
+        (r) => r.type === "couple" && r.coupleKey === row.coupleKey
+      );
+      for (const m of members) visited.add(m.id);
+      groups.push(members);
     }
 
     return groups;
@@ -168,7 +181,6 @@ export default function BulkAddModal({
   const validateRows = (): string[] => {
     const errors: string[] = [];
     const coupleGroups = getCoupleGroups();
-    const coupleMembers = new Set(coupleGroups.flatMap((g) => g.map((r) => r.id)));
 
     for (const row of rows) {
       if (!row.firstName.trim()) errors.push(`Ligne : Prénom manquant`);
@@ -179,6 +191,25 @@ export default function BulkAddModal({
     for (const group of coupleGroups) {
       if (group.length < 2) {
         errors.push(`Couple "${group[0].firstName} ${group[0].lastName}" : conjoint manquant`);
+      }
+    }
+
+    // Vérifie la capacité des tables sélectionnées
+    const occupancy: Record<string, number> = {};
+    for (const row of rows) {
+      if (!row.firstName.trim() || !row.lastName.trim()) continue;
+      if (!row.tableId) continue;
+      // Compte les invités déjà placés dans cette table + ceux saisis dans le modal
+      occupancy[row.tableId] = (occupancy[row.tableId] ?? 0) + 1;
+    }
+    for (const [tableId, count] of Object.entries(occupancy)) {
+      const table = tables.find((t) => t.id === tableId);
+      if (!table) continue;
+      const existing = guestCountByTable(tableId);
+      if (existing + count > table.capacity) {
+        errors.push(
+          `Table ${table.name} pleine (${existing + count}/${table.capacity}) : réduisez le nombre d'invités`
+        );
       }
     }
 
@@ -324,6 +355,7 @@ export default function BulkAddModal({
     // Crée les lignes à partir du CSV
     const tableMap = new Map(tables.map((t) => [t.name.toLowerCase(), t.id]));
     const importedRows: BulkAddRow[] = [];
+    let pendingCoupleKey: string | null = null;
 
     for (const row of data) {
       const firstName = row[firstNameIdx] ?? "";
@@ -335,12 +367,24 @@ export default function BulkAddModal({
       const tableName = tableIdx >= 0 ? (row[tableIdx] ?? "") : "";
       const tableId = tableName ? tableMap.get(tableName.toLowerCase()) ?? "" : "";
 
+      let coupleKey: string | null = null;
+      if (type === "couple") {
+        if (pendingCoupleKey) {
+          coupleKey = pendingCoupleKey;
+          pendingCoupleKey = null;
+        } else {
+          coupleKey = localId();
+          pendingCoupleKey = coupleKey;
+        }
+      }
+
       importedRows.push({
         id: localId(),
         firstName,
         lastName,
-        type: type as "singleton" | "couple",
+        type,
         tableId,
+        coupleKey,
       });
     }
 
@@ -537,33 +581,33 @@ export default function BulkAddModal({
                         />
                       </td>
                       <td className="px-2 py-1.5">
-                        <select
+                        <Select
                           value={row.type}
-                          onChange={(e) =>
-                            updateRow(row.id, "type", e.target.value)
+                          onValueChange={(v) =>
+                            updateRow(row.id, "type", v)
                           }
                           className={cn(
-                            "h-9 w-full rounded-lg border border-input bg-transparent px-2 text-xs focus-visible:ring-2 focus-visible:ring-gold focus-visible:outline-none",
+                            "h-9 px-2 text-xs",
                             isCouple && "border-gold/50 text-gold"
                           )}
                         >
-                          <option value="singleton">Seul(e)</option>
-                          <option value="couple">Couple</option>
-                        </select>
+                          <SelectItem value="singleton">Seul(e)</SelectItem>
+                          <SelectItem value="couple">Couple</SelectItem>
+                        </Select>
                       </td>
                       <td className="px-2 py-1.5">
-                        <select
+                        <Select
                           value={row.tableId}
-                          onChange={(e) => updateRow(row.id, "tableId", e.target.value)}
-                          className="h-9 w-full rounded-lg border border-input bg-transparent px-2 text-xs focus-visible:ring-2 focus-visible:ring-gold focus-visible:outline-none"
+                          onValueChange={(v) => updateRow(row.id, "tableId", v)}
+                          className="h-9 px-2 text-xs"
                         >
-                          <option value="">Non placé</option>
+                          <SelectItem value="">Non placé</SelectItem>
                           {tables.map((t) => (
-                            <option key={t.id} value={t.id}>
+                            <SelectItem key={t.id} value={t.id}>
                               {t.name} ({available} pl.)
-                            </option>
+                            </SelectItem>
                           ))}
-                        </select>
+                        </Select>
                       </td>
                       <td className="px-2 py-1.5">
                         <div className="flex justify-center gap-0.5">

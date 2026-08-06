@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Link from "next/link";
@@ -65,7 +65,7 @@ export default function CreateEventPage() {
   const {
     register,
     handleSubmit,
-    watch,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<EventForm>({
     resolver: zodResolver(eventSchema),
@@ -74,7 +74,8 @@ export default function CreateEventPage() {
     },
   });
 
-  const descriptionLength = watch("description")?.length ?? 0;
+  const description = useWatch({ control, name: "description" });
+  const descriptionLength = description?.length ?? 0;
 
   // Crée l'événement en base de données
   const onSubmit = async (data: EventForm) => {

@@ -16,9 +16,15 @@ export async function createClient() {
           return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          );
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          } catch {
+            // Le client serveur ne peut pas modifier les cookies pendant le rendu
+            // d'un Server Component. Ignoré ici car le proxy (src/proxy.ts)
+            // rafraîchit déjà la session à chaque requête.
+          }
         },
       },
     }
