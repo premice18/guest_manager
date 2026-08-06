@@ -23,7 +23,7 @@ export async function GET(
     const [guestsResult, tablesResult] = await Promise.all([
       supabase
         .from("guests")
-        .select("first_name, last_name, age_type, dietary_notes, needs_accessibility, table_id, tables!inner(name)")
+        .select("first_name, last_name, age_type, dietary_notes, needs_accessibility, is_present, table_id, tables(name)")
         .eq("event_id", parsedId.data),
       supabase
         .from("tables")
@@ -36,6 +36,8 @@ export async function GET(
     const tables = tablesResult.data ?? [];
 
     const totalGuests = guestsList.length;
+
+    const presentCount = guestsList.filter((g) => g.is_present).length;
 
     const ageBreakdown = {
       adults: guestsList.filter((g) => g.age_type === "adult").length,
@@ -83,6 +85,7 @@ export async function GET(
         eventName={event.name}
         eventDate={event.event_date}
         totalGuests={totalGuests}
+        presentCount={presentCount}
         ageBreakdown={ageBreakdown}
         dietarySummary={dietarySummary}
         tables={tablesWithGuests}

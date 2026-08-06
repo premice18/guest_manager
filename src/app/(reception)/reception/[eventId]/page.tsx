@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef, use } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -14,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Select, SelectItem } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -33,15 +35,12 @@ import {
   ArrowLeft,
   Clock,
   Baby,
-  AlertTriangle,
   ChevronDown,
   ChevronUp,
   LayoutGrid,
   List,
   Keyboard,
   PartyPopper,
-  UserCheck,
-  Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
@@ -108,6 +107,7 @@ export default function ReceptionPage({
 }) {
   const prefersReducedMotion = useReducedMotion();
   const { eventId } = use(params);
+  const router = useRouter();
   const supabase = createClient();
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -177,32 +177,51 @@ export default function ReceptionPage({
   }, [eventId, supabase, enrichGuests]);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
+      // Garde d'accès : redirige si non connecté ou sans accès à l'événement
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (cancelled) return;
+      if (!user) {
+        router.push("/login");
+        return;
+      }
       const { data: ev } = await supabase
+        .from("events")
+        .select("id")
+        .eq("id", eventId)
+        .single();
+      if (cancelled) return;
+      if (!ev) {
+        router.push("/dashboard");
+        return;
+      }
+
+      await refreshGuests();
+      if (cancelled) return;
+
+      const { data: evn } = await supabase
         .from("events")
         .select("name")
         .eq("id", eventId)
         .single();
-      if (ev) setEventName(ev.name);
+      if (!cancelled && evn) setEventName(evn.name);
 
       const { data: tbls } = await supabase
         .from("tables")
         .select("*")
         .eq("event_id", eventId)
         .order("name");
-      setTables(tbls ?? []);
+      if (!cancelled) setTables(tbls ?? []);
 
-      const { data: gsts } = await supabase
-        .from("guests")
-        .select("*, tables(name)")
-        .eq("event_id", eventId)
-        .order("last_name")
-        .order("first_name");
-
-      if (gsts) await enrichGuests(gsts);
       setLoading(false);
     })();
-  }, [eventId, supabase, enrichGuests]);
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId, supabase, router, refreshGuests]);
 
   useRealtimeGuests(eventId);
 
@@ -323,11 +342,12 @@ export default function ReceptionPage({
       return;
     }
 
-    try {
+try {
       const { error } = await supabase
         .from("guests")
         .update({ is_present: true, checked_in_at: timestamp })
-        .eq("group_id", groupId);
+        .eq("group_id", groupId)
+        .eq("event_id", eventId);
 
       if (error) {
         toast.error(error.message);
@@ -341,21 +361,48 @@ export default function ReceptionPage({
   const addWalkin = handleSubmit(async (formData) => {
     setWiSaving(true);
     try {
+      const walkinPayload = {
+        event_id: eventId,
+        first_name: formData.first_name.trim(),
+        last_name: formData.last_name.trim(),
+        category: formData.category
+          ? formData.category.trim()
+          : "Invité imprévu",
+        age_type: formData.age_type,
+        table_id: formData.table_id === "none" ? null : formData.table_id,
+        notes: formData.notes?.trim() || null,
+        is_present: true,
+        checked_in_at: new Date().toISOString(),
+      };
+
+      // Mode hors-ligne : on met en file d'attente l'insertion du walk-in
+      if (!isOnline) {
+        const actionId = nanoid();
+        addPendingAction({
+          id: actionId,
+          guestId: actionId,
+          type: "checkin",
+          timestamp: walkinPayload.checked_in_at!,
+          walkin: {
+            first_name: walkinPayload.first_name,
+            last_name: walkinPayload.last_name,
+            category: walkinPayload.category,
+            age_type: walkinPayload.age_type,
+            table_id: walkinPayload.table_id,
+            notes: walkinPayload.notes,
+          },
+        });
+        toast.success(
+          `${walkinPayload.first_name} ${walkinPayload.last_name} ajouté hors-ligne (synchronisation à la reconnexion)`,
+        );
+        setWalkinModal(false);
+        resetWalkinForm();
+        return;
+      }
+
       const { data, error } = await supabase
         .from("guests")
-        .insert({
-          event_id: eventId,
-          first_name: formData.first_name.trim(),
-          last_name: formData.last_name.trim(),
-          category: formData.category
-            ? formData.category.trim()
-            : "Invité imprévu",
-          age_type: formData.age_type,
-          table_id: formData.table_id === "none" ? null : formData.table_id,
-          notes: formData.notes?.trim() || null,
-          is_present: true,
-          checked_in_at: new Date().toISOString(),
-        })
+        .insert(walkinPayload)
         .select("*, tables(name)")
         .single();
 
@@ -364,10 +411,13 @@ export default function ReceptionPage({
         return;
       }
 
-      const tableName =
-        (data as unknown as { tables?: { name: string } | null })?.tables
-          ?.name ?? "non placé";
-      toast.success(`${data.first_name} ${data.last_name} → ${tableName}`);
+      const insertedGuest = data as unknown as {
+        first_name: string;
+        last_name: string;
+        tables?: { name: string } | null;
+      };
+      const tableName = insertedGuest.tables?.name ?? "non placé";
+      toast.success(`${insertedGuest.first_name} ${insertedGuest.last_name} → ${tableName}`);
       setWalkinModal(false);
       resetWalkinForm();
 
@@ -384,8 +434,23 @@ export default function ReceptionPage({
     const actions = [...pendingActions];
     let synced = 0;
 
-    for (const action of actions) {
+for (const action of actions) {
       try {
+        // Walk-in créé hors-ligne : on insère l'invité
+        if (action.walkin) {
+          const { error } = await supabase.from("guests").insert({
+            event_id: eventId,
+            ...action.walkin,
+            is_present: true,
+            checked_in_at: action.timestamp,
+          });
+          if (!error) {
+            removePendingAction(action.guestId);
+            synced++;
+          }
+          continue;
+        }
+
         const { error } = await supabase
           .from("guests")
           .update({
@@ -406,7 +471,7 @@ export default function ReceptionPage({
     if (synced > 0) {
       toast.success(`${synced} action(s) synchronisée(s)`);
     }
-  }, [pendingActions, supabase, removePendingAction]);
+  }, [pendingActions, supabase, removePendingAction, eventId]);
 
   useEffect(() => {
     if (isOnline && pendingActions.length > 0) {
@@ -414,16 +479,30 @@ export default function ReceptionPage({
     }
   }, [isOnline, pendingActions.length, syncPendingActions]);
 
+// Suivi de la connectivité : s'appuie sur navigator.onLine (source fiable)
+  // plutôt que sur le seul statut du canal Realtime
   useEffect(() => {
-    const handleOnline = () => useReceptionStore.getState().setOnline(true);
-    const handleOffline = () => useReceptionStore.getState().setOnline(false);
+    const setOnline = useReceptionStore.getState().setOnline;
+
+    // Valeur initiale depuis navigator.onLine
+    setOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
+
+    const handleOnline = () => {
+      setOnline(true);
+      // Au retour du réseau : resynchronise les actions en attente
+      // ET recharge les invités (reprend un fetch initial qui aurait échoué)
+      syncPendingActions();
+      refreshGuests();
+    };
+    const handleOffline = () => setOnline(false);
+
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, []);
+  }, [syncPendingActions, refreshGuests]);
 
   // Raccourcis clavier
   useEffect(() => {
@@ -672,31 +751,31 @@ export default function ReceptionPage({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <select
+            <Select
               value={filterTable}
-              onChange={(e) => setFilterTable(e.target.value)}
-              className="h-10 rounded-lg border border-input bg-white px-3 text-sm focus-visible:ring-2 focus-visible:ring-gold focus-visible:outline-none"
+              onValueChange={setFilterTable}
+              className="w-auto bg-white"
               aria-label="Filtrer par table"
             >
-              <option value="all">Toutes les tables</option>
-              <option value="none">Non placés</option>
+              <SelectItem value="all">Toutes les tables</SelectItem>
+              <SelectItem value="none">Non placés</SelectItem>
               {tables.map((t) => (
-                <option key={t.id} value={t.id}>
+                <SelectItem key={t.id} value={t.id}>
                   {t.name}
-                </option>
+                </SelectItem>
               ))}
-            </select>
+            </Select>
 
-            <select
+            <Select
               value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="h-10 rounded-lg border border-input bg-white px-3 text-sm focus-visible:ring-2 focus-visible:ring-gold focus-visible:outline-none"
+              onValueChange={setFilterStatus}
+              className="w-auto bg-white"
               aria-label="Filtrer par statut"
             >
-              <option value="all">Tous</option>
-              <option value="present">Présents</option>
-              <option value="absent">Absents</option>
-            </select>
+              <SelectItem value="all">Tous</SelectItem>
+              <SelectItem value="present">Présents</SelectItem>
+              <SelectItem value="absent">Absents</SelectItem>
+            </Select>
 
             <motion.div
               whileTap={prefersReducedMotion ? {} : { scale: 0.95 }}
@@ -1336,33 +1415,31 @@ export default function ReceptionPage({
 
             <div className="space-y-1.5">
               <Label htmlFor="wi-age">Tranche d&rsquo;âge</Label>
-              <select
+              <Select
                 id="wi-age"
                 {...register("age_type")}
-                className="h-11 w-full rounded-lg border border-input bg-transparent px-3 text-sm focus-visible:ring-2 focus-visible:ring-gold focus-visible:outline-none"
               >
-                <option value="adult">Adulte</option>
-                <option value="child">Enfant</option>
-                <option value="baby">Bébé</option>
-              </select>
+                <SelectItem value="adult">Adulte</SelectItem>
+                <SelectItem value="child">Enfant</SelectItem>
+                <SelectItem value="baby">Bébé</SelectItem>
+              </Select>
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="wi-table">Table attribuée</Label>
-              <select
+              <Select
                 id="wi-table"
                 {...register("table_id")}
-                className="h-11 w-full rounded-lg border border-input bg-transparent px-3 text-sm focus-visible:ring-2 focus-visible:ring-gold focus-visible:outline-none"
               >
-                <option value="none">Non placé</option>
+                <SelectItem value="none">Non placé</SelectItem>
                 {tables
                   .filter((t) => !t.is_locked && getTableAvailable(t.id) > 0)
                   .map((t) => (
-                    <option key={t.id} value={t.id}>
+                    <SelectItem key={t.id} value={t.id}>
                       {t.name} ({getTableAvailable(t.id)}/{t.capacity})
-                    </option>
+                    </SelectItem>
                   ))}
-              </select>
+              </Select>
             </div>
 
             <div className="space-y-1.5">
@@ -1395,133 +1472,5 @@ export default function ReceptionPage({
 }
 
 // Panneau de statistiques réutilisable
-function StatPanel({
-  presentCount,
-  totalGuests,
-  progressPercent,
-  childrenCount,
-  presentChildren,
-  unassignedCount,
-  pendingActions,
-}: {
-  presentCount: number;
-  totalGuests: number;
-  progressPercent: number;
-  childrenCount: number;
-  presentChildren: number;
-  unassignedCount: number;
-  pendingActions: number;
-}) {
-  const prefersReducedMotion = useReducedMotion();
-  const items = [
-    {
-      label: "Taux de présence",
-      value: `${progressPercent}%`,
-      icon: UserCheck,
-      color: "text-green-600",
-      ariaLabel: `Taux de présence : ${progressPercent}%`,
-    },
-    {
-      label: "Enfants présents",
-      value: `${presentChildren}/${childrenCount}`,
-      icon: Baby,
-      color: "text-gold",
-      ariaLabel: `Enfants présents : ${presentChildren} sur ${childrenCount}`,
-    },
-    {
-      label: "Non placés",
-      value: `${unassignedCount}`,
-      icon: AlertTriangle,
-      color: unassignedCount > 0 ? "text-amber-500" : "text-muted-foreground",
-      ariaLabel: `Invités non placés : ${unassignedCount}`,
-    },
-  ];
-
-  if (pendingActions > 0) {
-    items.push({
-      label: "En attente",
-      value: `${pendingActions}`,
-      icon: Timer,
-      color: "text-gold",
-      ariaLabel: `Actions en attente : ${pendingActions}`,
-    });
-  }
-
-  return (
-    <div className="rounded-xl border border-border bg-white p-4">
-      <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-        Statistiques
-      </h3>
-      <div className="space-y-3">
-        {/* Compteur principal */}
-        <motion.div
-          initial={prefersReducedMotion ? false : { scale: 0.9, opacity: 0 }}
-          animate={prefersReducedMotion ? {} : { scale: 1, opacity: 1 }}
-          transition={{ type: "spring" as const, stiffness: 200, damping: 20 }}
-          className="text-center"
-        >
-          <div className="relative inline-flex items-center justify-center">
-            <svg
-              className="size-20 -rotate-90"
-              viewBox="0 0 80 80"
-              aria-hidden="true"
-            >
-              <circle
-                cx="40"
-                cy="40"
-                r="34"
-                fill="none"
-                stroke="#e2e8f0"
-                strokeWidth="5"
-              />
-              <motion.circle
-                cx="40"
-                cy="40"
-                r="34"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="5"
-                strokeLinecap="round"
-                strokeDasharray={`${2 * Math.PI * 34}`}
-                initial={prefersReducedMotion ? false : { strokeDashoffset: 2 * Math.PI * 34 }}
-                animate={prefersReducedMotion ? {} : {
-                  strokeDashoffset:
-                    2 * Math.PI * 34 * (1 - progressPercent / 100),
-                }}
-                transition={{ duration: 0.6, ease: "easeOut" }}
-                className="text-gold"
-              />
-            </svg>
-            <span className="absolute text-lg font-bold">{presentCount}</span>
-          </div>
-          <p
-            className="mt-1 text-xs text-muted-foreground"
-            aria-label={`sur ${totalGuests} invités`}
-          >
-            sur {totalGuests} invités
-          </p>
-        </motion.div>
-
-        {/* Détails */}
-        <div className="space-y-2">
-          {items.map((item) => (
-            <div
-              key={item.label}
-              className="flex items-center justify-between text-sm"
-              aria-label={item.ariaLabel}
-            >
-              <span className="flex items-center gap-1.5 text-muted-foreground">
-                <item.icon className="size-3.5" aria-hidden="true" />
-                {item.label}
-              </span>
-              <span className={`font-semibold ${item.color}`}>
-                {item.value}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
+import { StatPanel } from "@/components/reception/stat-panel";
 

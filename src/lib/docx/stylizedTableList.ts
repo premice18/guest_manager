@@ -6,18 +6,14 @@ import {
   Paragraph,
   TextRun,
   Table,
-  TableRow,
-  TableCell,
-  WidthType,
   AlignmentType,
   BorderStyle,
   ShadingType,
-  HeadingLevel,
   PageNumber,
   Footer,
   convertInchesToTwip,
 } from "docx";
-import type { DocxTableWithGuests, DocxGuest } from "./utils";
+import type { DocxTableWithGuests } from "./utils";
 import { getGroupSize, getGroupSizeMap, COLORS } from "./utils";
 
 export async function generateStylizedTableListDocx(

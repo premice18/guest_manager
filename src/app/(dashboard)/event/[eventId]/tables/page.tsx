@@ -1,13 +1,13 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database.types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectItem } from "@/components/ui/select";
 import {
   Card,
   CardContent,
@@ -22,13 +22,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -40,7 +33,7 @@ import {
   GripVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 
 type Table = Database["public"]["Tables"]["tables"]["Row"];
 type Zone = Database["public"]["Tables"]["zones"]["Row"];
@@ -83,10 +76,9 @@ export default function TablesPage({
 }: {
   params: Promise<{ eventId: string }>;
 }) {
-  const prefersReducedMotion = useReducedMotion();
-  const router = useRouter();
+const prefersReducedMotion = useReducedMotion();
   const [eventId, setEventId] = useState("");
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
   const [tables, setTables] = useState<TableWithCount[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
@@ -104,15 +96,59 @@ export default function TablesPage({
   const [formLocked, setFormLocked] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const loadData = useCallback(async () => {
-    const id = await params.then((p) => p.eventId);
-    setEventId(id);
+useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const id = await params.then((p) => p.eventId);
+      if (cancelled) return;
+      setEventId(id);
 
-    // Récupère les tables et le nombre d'invités associés
+      // Récupère les tables et le nombre d'invités associés
+      const { data: tbls } = await supabase
+        .from("tables")
+        .select("*")
+        .eq("event_id", id)
+        .order("sort_order", { ascending: true })
+        .order("name");
+      const rawTables = (tbls ?? []) as Table[];
+
+      const { data: guestCounts } = await supabase
+        .from("guests")
+        .select("table_id")
+        .eq("event_id", id);
+      const countMap: Record<string, number> = {};
+      for (const g of (guestCounts ?? []) as { table_id: string | null }[]) {
+        if (g.table_id) countMap[g.table_id] = (countMap[g.table_id] ?? 0) + 1;
+      }
+
+      const { data: zns } = await supabase
+        .from("zones")
+        .select("*")
+        .eq("event_id", id)
+        .order("name");
+
+      if (!cancelled) {
+        setTables(
+          rawTables.map((t) => ({
+            ...t,
+            guest_count: countMap[t.id] ?? 0,
+          }))
+        );
+        setZones(zns ?? []);
+        setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [params, supabase]);
+
+  const refreshData = async () => {
+    if (!eventId) return;
     const { data: tbls } = await supabase
       .from("tables")
       .select("*")
-      .eq("event_id", id)
+      .eq("event_id", eventId)
       .order("sort_order", { ascending: true })
       .order("name");
     const rawTables = (tbls ?? []) as Table[];
@@ -120,11 +156,17 @@ export default function TablesPage({
     const { data: guestCounts } = await supabase
       .from("guests")
       .select("table_id")
-      .eq("event_id", id);
+      .eq("event_id", eventId);
     const countMap: Record<string, number> = {};
     for (const g of (guestCounts ?? []) as { table_id: string | null }[]) {
       if (g.table_id) countMap[g.table_id] = (countMap[g.table_id] ?? 0) + 1;
     }
+
+    const { data: zns } = await supabase
+      .from("zones")
+      .select("*")
+      .eq("event_id", eventId)
+      .order("name");
 
     setTables(
       rawTables.map((t) => ({
@@ -132,19 +174,8 @@ export default function TablesPage({
         guest_count: countMap[t.id] ?? 0,
       }))
     );
-
-    const { data: zns } = await supabase
-      .from("zones")
-      .select("*")
-      .eq("event_id", id)
-      .order("name");
     setZones(zns ?? []);
-    setLoading(false);
-  }, [params, supabase]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  };
 
   // Ouvre le modal pour créer ou éditer une table
   const openModal = (table?: Table) => {
@@ -205,7 +236,7 @@ export default function TablesPage({
         }
       }
       setModalOpen(false);
-      loadData();
+      refreshData();
     } catch {
       toast.error("Erreur lors de la sauvegarde");
     } finally {
@@ -225,7 +256,7 @@ export default function TablesPage({
         toast.error(error.message);
         return;
       }
-      loadData();
+      refreshData();
     } catch {
       toast.error("Erreur lors de la suppression");
     }
@@ -242,7 +273,7 @@ export default function TablesPage({
         toast.error(error.message);
         return;
       }
-      loadData();
+      refreshData();
     } catch {
       toast.error("Erreur lors du verrouillage");
     }
@@ -321,18 +352,18 @@ export default function TablesPage({
           onChange={(e) => setSearch(e.target.value)}
           className="sm:max-w-xs focus-visible:ring-2 focus-visible:ring-gold"
         />
-        <select
+        <Select
           value={zoneFilter}
-          onChange={(e) => setZoneFilter(e.target.value)}
-          className="h-11 rounded-lg border border-input bg-transparent px-3 text-sm focus-visible:ring-2 focus-visible:ring-gold focus-visible:outline-none"
+          onValueChange={setZoneFilter}
+          className="w-auto"
         >
-          <option value="all">Toutes les zones</option>
+          <SelectItem value="all">Toutes les zones</SelectItem>
           {zones.map((z) => (
-            <option key={z.id} value={z.id}>
+            <SelectItem key={z.id} value={z.id}>
               {z.name}
-            </option>
+            </SelectItem>
           ))}
-        </select>
+        </Select>
       </motion.div>
 
       {/* Grille des tables */}
@@ -547,32 +578,30 @@ export default function TablesPage({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="table-shape">Forme</Label>
-                <select
+                <Select
                   id="table-shape"
                   value={formShape}
-                  onChange={(e) => setFormShape(e.target.value as any)}
-                  className="h-11 w-full rounded-lg border border-input bg-transparent px-3 text-sm focus-visible:ring-2 focus-visible:ring-gold focus-visible:outline-none"
+                  onValueChange={(v) => setFormShape(v as "round" | "rectangular" | "imperial")}
                 >
-                  <option value="round">Ronde</option>
-                  <option value="rectangular">Rectangulaire</option>
-                  <option value="imperial">Impériale</option>
-                </select>
+                  <SelectItem value="round">Ronde</SelectItem>
+                  <SelectItem value="rectangular">Rectangulaire</SelectItem>
+                  <SelectItem value="imperial">Impériale</SelectItem>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="table-zone">Zone</Label>
-                <select
+                <Select
                   id="table-zone"
                   value={formZone}
-                  onChange={(e) => setFormZone(e.target.value)}
-                  className="h-11 w-full rounded-lg border border-input bg-transparent px-3 text-sm focus-visible:ring-2 focus-visible:ring-gold focus-visible:outline-none"
+                  onValueChange={setFormZone}
                 >
-                  <option value="none">Aucune zone</option>
+                  <SelectItem value="none">Aucune zone</SelectItem>
                   {zones.map((z) => (
-                    <option key={z.id} value={z.id}>
+                    <SelectItem key={z.id} value={z.id}>
                       {z.name}
-                    </option>
+                    </SelectItem>
                   ))}
-                </select>
+                </Select>
               </div>
               <label className="flex items-center gap-2 text-sm">
                 <input

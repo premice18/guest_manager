@@ -8,8 +8,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Plus, Archive, Calendar, MapPin, Users, UserCheck, UserX, Clock } from "lucide-react";
+import { Plus, Archive, Calendar, MapPin, Users, UserCheck, UserX } from "lucide-react";
 import { formatDate } from "@/lib/utils";
+import { EventStatusBadge } from "@/components/event/event-status-badge";
 
 // Calcule la couleur de la barre de progression selon le taux de présence
 function progressColor(rate: number): string {
@@ -124,26 +125,7 @@ export default async function DashboardPage() {
     redirect("/login");
   };
 
-  // Détermine le statut d'un événement en fonction de sa date
-  const getEventStatus = (date: string) => {
-    const now = new Date();
-    const eventDate = new Date(date);
-    const diffDays = Math.ceil(
-      (eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-    );
-    if (diffDays < 0) return { label: "Terminé", class: "text-muted-foreground" };
-    if (diffDays <= 7) return { label: "Bientôt", class: "text-gold font-medium" };
-    return { label: "À venir", class: "text-green-600" };
-  };
-
-  // Styles visuels pour chaque statut
-  const statusStyles: Record<string, { container: string; dot: string }> = {
-    "Bientôt": { container: "bg-gold/10 text-gold ring-1 ring-gold/20", dot: "bg-gold" },
-    "À venir": { container: "bg-green-100 text-green-700 ring-1 ring-green-200", dot: "bg-green-500" },
-    "Terminé": { container: "bg-muted text-muted-foreground ring-1 ring-border", dot: "bg-muted-foreground" },
-  };
-
-  return (
+    return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       {/* En-tête avec titre et bouton de création */}
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -177,8 +159,6 @@ export default async function DashboardPage() {
       {events.length > 0 ? (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {events.map((event) => {
-            const status = getEventStatus(event.event_date);
-            const style = statusStyles[status.label] ?? statusStyles["Terminé"];
             return (
               <Link
                 key={event.id}
@@ -191,20 +171,8 @@ export default async function DashboardPage() {
                       <CardTitle className="text-lg font-semibold text-deep-black">
                         {event.name}
                       </CardTitle>
-                      {/* Badge de statut avec indicateur visuel */}
-                      <span
-                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${style.container}`}
-                      >
-                        <span className="relative flex size-2">
-                          {status.label === "Bientôt" && (
-                            <span className="absolute inline-flex h-full w-full rounded-full bg-gold opacity-75" />
-                          )}
-                          <span
-                            className={`relative inline-flex size-2 rounded-full ${style.dot}`}
-                          />
-                        </span>
-                        {status.label}
-                      </span>
+                      {/* Badge de statut (calculé côté client, fuseau de l'utilisateur) */}
+                      <EventStatusBadge eventDate={event.event_date} />
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-2.5">

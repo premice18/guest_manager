@@ -20,10 +20,21 @@ export async function GET(
 
     const { data: guests } = await supabase
       .from("guests")
-      .select("id, first_name, last_name, category, age_type, dietary_notes, needs_accessibility, is_present, checked_in_at, group_id, group_name, notes, table_id, tables!inner(name)")
+      .select("id, first_name, last_name, category, age_type, dietary_notes, needs_accessibility, is_present, checked_in_at, group_id, group_name, notes, table_id, tables(name)")
       .eq("event_id", parsedId.data)
       .order("last_name", { ascending: true })
       .order("first_name", { ascending: true });
+
+    // Sécurise une cellule CSV : échappe les guillemets ET neutralise
+    // l'injection de formule Excel (cellules débutant par = + - @ etc.)
+    function escapeCsvCell(value: unknown): string {
+      let str = String(value ?? "");
+      // Prévient l'injection de formule (OWASP CSV Injection)
+      if (/^[=+\-@\t\r]/.test(str)) {
+        str = `'${str}`;
+      }
+      return `"${str.replace(/"/g, '""')}"`;
+    }
 
     const headers = [
       "ID",
@@ -65,7 +76,7 @@ export async function GET(
 
     const csvContent = [
       headers.join(";"),
-      ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(";")),
+      ...rows.map((row) => row.map((cell) => escapeCsvCell(cell)).join(";")),
     ].join("\r\n");
 
     const bom = "\uFEFF";

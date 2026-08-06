@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import { RegisterServiceWorker } from "@/components/pwa/register-service-worker";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -14,14 +15,30 @@ const playfairDisplay = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Guest Manager",
-  icons: { icon: "/logo.svg" },
-  description: "L'art de recevoir, simplifié.",
+  title: {
+    default: "Guest Manager — L'art de votre convivialité",
+    template: "%s — Guest Manager",
+  },
+  description:
+    "Gérez vos invités, tables et placements avec élégance.",
+  applicationName: "Guest Manager",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "Guest Manager",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: "/logo.svg",
+    apple: "/icons/apple-touch-icon.png",
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
+  themeColor: "#C9A96E",
 };
 
 export default function RootLayout({
@@ -57,6 +74,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col font-sans">
         {children}
         <Toaster />
+        <RegisterServiceWorker />
       </body>
     </html>
   );

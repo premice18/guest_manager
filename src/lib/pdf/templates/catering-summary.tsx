@@ -6,6 +6,7 @@ interface CateringSummaryProps {
   eventName: string;
   eventDate: string;
   totalGuests: number;
+  presentCount: number;
   ageBreakdown: { adults: number; children: number; babies: number };
   dietarySummary: Array<{ type: string; count: number }>;
   tables: Array<{
@@ -134,6 +135,7 @@ export function CateringSummaryDocument({
   eventName,
   eventDate,
   totalGuests,
+  presentCount,
   ageBreakdown,
   dietarySummary,
   tables,
@@ -164,6 +166,14 @@ export function CateringSummaryDocument({
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Total invités</Text>
           <Text style={styles.summaryValue}>{totalGuests}</Text>
+        </View>
+        <View style={[styles.summaryRow, styles.summaryRowAlt]}>
+          <Text style={styles.summaryLabel}>Présents</Text>
+          <Text style={styles.summaryValue}>{presentCount}</Text>
+        </View>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>En attente d&rsquo;arrivée</Text>
+          <Text style={styles.summaryValue}>{totalGuests - presentCount}</Text>
         </View>
         <View style={[styles.summaryRow, styles.summaryRowAlt]}>
           <Text style={styles.summaryLabel}>Adultes</Text>

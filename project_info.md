@@ -2,7 +2,7 @@
 
 ## 1. Présentation & Branding
 
-**Nom du projet :** Guest Manager  
+**Nom du projet :** Guest Manager
 **Slogan :** _"L'art de recevoir, simplifié."_
 
 **Positionnement :** Application web destinée aux organisateurs d'événements (mariages, galas, soirées d'entreprise) pour gérer l'accueil des invités avec élégance et efficacité.
@@ -18,144 +18,68 @@
   - Titres : _Playfair Display_ (serif, caractère raffiné)
   - Corps : _Inter_ (sans-serif, lisibilité moderne)
 - **Iconographie :** Icônes fines de _Lucide React_ (lignes épurées).
-- **Atmosphère :** Interface épurée, aérée, avec des ombres douces et des animations subtiles. L'expérience utilisateur doit évoquer la fluidité et la maîtrise.
+- **Atmosphère :** Interface épurée, aérée, avec des ombres douces et des animations subtiles.
 
 ---
 
 ## 🖼 Logo
 
-**Description :**
-
 - Un symbole minimaliste représentant une table ronde vue de dessus avec deux verres à vin au centre, entourés d'un cercle doré.
 - Le nom **"Guest Manager"** en dessous.
-- Couleurs : doré (#C9A96E) sur fond sombre pour l'en‑tête, ou inversement.
-
-**Fichier SVG :** `public/logo.svg` (vectoriel).
-
-**Contraintes :**
-
-- ⚠️ Le texte "GUEST MANAGER" dans le SVG utilise `font-family="Playfair Display"` qui **n'est pas chargée** dans le contexte SVG. Les navigateurs utiliseront le fallback serif générique.  
-  **Solution :** Convertir le texte en paths vectoriels (ou utiliser `font-family="system-ui, serif"` avec un fallback).
-- 🚨 **Pas de version dark mode** — Créer `logo-dark.svg` (fond `#1A1A1A`, texte `#F8F6F0`, cercle doré) et l'intégrer avec `media="(prefers-color-scheme: dark)"` dans `layout.tsx`.
-- ℹ️ Supprimer les fichiers boilerplate inutiles : `next.svg`, `vercel.svg`, `globe.svg`, `file.svg`, `window.svg` qui traînent dans `public/`.
+- Couleurs : doré (#C9A96E) sur fond sombre, ou inversement.
+- **Fichier SVG :** `public/logo.svg` (vectoriel).
+- Tests de contrastes et taille tactile conformes WCAG AA (dont `text-deep-black` sur les boutons dorés, ratio 5.2:1).
 
 ---
 
-## 🛠 2. Stack Technique (décisions figées)
+## 🛠 2. Stack Technique
 
 - **Framework :** Next.js 16 (App Router) — Server Components et Server Actions.
-- **Langage :** TypeScript (strict mode).
-- **Base de données & Auth :** Supabase (PostgreSQL) avec Realtime.
-- **Styling :** Tailwind CSS v4 + Design system custom (`@base-ui/react`).
+- **Langage :** TypeScript (strict mode, `tsc --noEmit` sans erreur).
+- **Base de données & Auth :** Supabase (PostgreSQL) avec Realtime et RLS.
+- **Styling :** Tailwind CSS v4 + design system custom.
 - **État client :** Zustand (persistance locale, mode offline).
 - **Génération PDF :** `@react-pdf/renderer`.
-- **Génération DOCX :** `docx` (npm).
-- **Gestion de formulaires :** React Hook Form + Zod (validation).
-- **Drag & Drop :** `@dnd-kit/core` (pour le placement des tables).
-- **Animations :** Framer Motion (avec `useReducedMotion()` obligatoire).
-- **Proxies / Middleware :** `src/proxy.ts` (Next.js 16 pattern, pas de `middleware.ts`).
+- **Génération DOCX :** `docx`.
+- **Gestion de formulaires :** React Hook Form + Zod.
+- **Drag & Drop :** `@dnd-kit/core` (placement des tables).
+- **Animations :** Framer Motion (avec `useReducedMotion()`).
+- **Files & middleware :** `src/proxy.ts` (Next.js 16).
+- **PWA :** manifest (`src/app/manifest.ts`), service worker (`public/sw.js`), icônes générées.
 
 ---
 
-## 🗄 3. Modèle de Données (structure Supabase)
+## 🗄 3. Modèle de Données (Supabase)
 
-_Voir le script SQL complet dans le dossier `/supabase/migrations`._  
-Résumé des tables et leurs champs clés :
+_Voir le SQL dans `/supabase/migrations`._  
+Enums : `age_category` ('adult','child','baby'), `table_shape` ('round','rectangular','imperial').
 
-| Table         | Champs principaux                                                                                                                                                                                           |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `events`      | `id`, `name`, `event_date`, `location`, `owner_id` (FK → `auth.users`)                                                                                                                                      |
-| `zones`       | `id`, `event_id` (FK), `name`                                                                                                                                                                               |
-| `tables`      | `id`, `event_id`, `zone_id` (nullable), `name`, `capacity`, `shape` (enum), `is_locked`                                                                                                                     |
-| `guests`      | `id`, `event_id`, `table_id` (nullable), `first_name`, `last_name`, `group_id`, `group_name`, `category`, `age_type` (enum), `dietary_notes`, `needs_accessibility`, `is_present`, `checked_in_at`, `notes` |
-| `event_staff` | `id`, `event_id`, `user_id` (FK → `auth.users`), `role` ('admin' ou 'host')                                                                                                                                 |
+| Table         | Champs principaux                                                                                                                        |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `events`      | `id`, `name`, `event_date`, `location`, `description`, `owner_id` (→ `auth.users`), `is_archived`                                        |
+| `zones`       | `id`, `event_id`, `name`                                                                                                                 |
+| `tables`      | `id`, `event_id`, `zone_id` (nullable), `name`, `capacity`, `shape` (enum), `is_locked`, `sort_order`                                    |
+| `guests`      | `id`, `event_id`, `table_id` (nullable), `first_name`, `last_name`, `group_id`, `group_name`, `category`, `age_type`, `dietary_notes`, `needs_accessibility`, `is_present`, `checked_in_at`, `notes` |
+| `event_staff` | `id`, `event_id`, `user_id` (→ `auth.users`), `role` ('admin' ou 'host')                                                                |
 
-**Enums :** `age_category` ('adult','child','baby'), `table_shape` ('round','rectangular','imperial').
-
----
-
-## 📋 4. Fonctionnalités détaillées (par module)
-
-_(Conserver toutes les sections existantes : 4.1 à 4.9 — Authentification, Configuration, Zones, Tables, Invités, Placement, Check‑in, Statistiques, Exports)_
+**Types Supabase** : `src/types/database.types.ts` (générés manuellement, comprenant les relations FK pour les jointures typées).
 
 ---
 
-## 🎨 5. Audit UX/UI & Directives de Qualité (AJOUT CRITIQUE)
+## 📋 4. Fonctionnalités (par module)
 
-### 5.1. Audit global – État des lieux
-
-**Note globale UX/UI :** 3.5/10 — « Amateur avec des ambitions pro, mais ça sonne creux »
-
-**Problèmes critiques (12) :** à corriger en priorité (Phase 1 – cette semaine)  
-**Problèmes majeurs (22) :** à corriger dans le mois (Phase 2)  
-**Problèmes mineurs (18) :** à améliorer progressivement (Phase 3)
-
----
-
-### 5.2. Phase 1 — Corrections CRITIQUES (🚨) — À faire avant toute nouvelle fonctionnalité
-
-| #   | Élément                           | Problème                                                                                                                        | Action requise                                                                                                                                                                                   |
-| --- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | **Sonner (toasts)**               | `--popover` et `--popover-foreground` indéfinis → toasts invisibles (background transparent)                                    | Ajouter dans `globals.css` : `:root { --popover: #ffffff; --popover-foreground: #2D2D2D; } .dark { --popover: #1e1e1e; --popover-foreground: #e5e5e5; }`                                         |
-| 2   | **Bouton gold**                   | Texte blanc sur fond gold → ratio de contraste 2.8:1 (échec WCAG AA)                                                            | Remplacer `text-white` par `text-deep-black` (#1A1A1A) sur tous les boutons de variant `default`. Ratio 5.2:1 ✅                                                                                 |
-| 3   | **`--text-secondary`**            | Ratio 3.7:1 sur fond `#F8F6F0` → échec WCAG AA                                                                                  | Passer de `#6b6b6b` à `#505050` (ratio 4.5:1)                                                                                                                                                    |
-| 4   | **`prefers-reduced-motion`**      | Framer Motion ignore la media query → utilisateurs sensibles subissent toutes les animations                                    | Ajouter `import { useReducedMotion } from "framer-motion"` et conditionner les animations dans chaque composant. Vérifier `prefersReducedMotion` avant d'appliquer des `spring` ou `transition`. |
-| 5   | **`id="dialog-title"`**           | Hardcodé → si 2 dialogs sur la même page, conflit d'ID → ARIA cassé                                                             | Remplacer par `const titleId = React.useId()` et passer `id={titleId}`. Utiliser `useId()` dans tous les composants dialog.                                                                      |
-| 6   | **`next/font` contourné**         | `--font-sans` et `--font-serif` définis avec des chaînes dures au lieu de `var(--font-inter)` et `var(--font-playfair-display)` | Corriger `@theme inline` dans `globals.css` : `--font-sans: var(--font-inter), ui-sans-serif, ...;` et `--font-serif: var(--font-playfair-display), ...;`                                        |
-| 7   | **`--input` variable**            | Utilisée dans `button.tsx` (dark mode) mais jamais définie                                                                      | Ajouter dans `:root` : `--input: #d1d5db;` et dans `.dark` : `--input: #374151;`                                                                                                                 |
-| 8   | **Tableau invités (mobile)**      | Colonnes masquées sur mobile, pas de scroll horizontal                                                                          | Ajouter `overflow-x-auto` sur le conteneur `<div className="overflow-x-auto">`. Sur mobile, utiliser des cartes horizontales au lieu d'un tableau si nécessaire.                                 |
-| 9   | **Framer Motion – coût**          | Spring physics partout → lourd pour les mobiles                                                                                 | Préférer `tween` avec `ease: [0.4, 0, 0.2, 1]` (Material Design). Réduire les animations sur mobile avec `useReducedMotion()`.                                                                   |
-| 10  | **Couleurs Recharts**             | Codées en dur (`#C9A96E`, `#f0f0f0`) → ne répondent pas au dark mode                                                            | Centraliser dans un fichier de constantes qui lit les CSS custom properties via `getComputedStyle()`, ou exposer des variables CSS au contexte Recharts.                                         |
-| 11  | **Boutons icône sans aria-label** | `<Button size="icon"><Edit /></Button>` n'a pas de label accessible                                                             | Ajouter `aria-label="Modifier"` sur tous les boutons icône. Vérifier aussi `aria-label` sur les boutons de suppression et d'ajout.                                                               |
-| 12  | **Fichiers boilerplate**          | `next.svg`, `vercel.svg`, `globe.svg`, `file.svg`, `window.svg` dans `public/`                                                  | Supprimer ces 5 fichiers inutiles (18KB de déchets).                                                                                                                                             |
+- **Authentification** : inscription, connexion (avec redirect sécurisé), mot de passe oublié / réinitialisation, déconnexion, profil utilisateur (3 onglets, avatar, sécurité avec indicateur de force de mot de passe).
+- **Dashboard** : liste des événements, statut calculé selon le fuseau horaire du navigateur, métriques de présence, archivage.
+- **Événement** : page d'accueil avec statistiques, configuration des zones et tables, verrouillage des tables.
+- **Invités** : liste, filtres, ajout/édition, import CSV, ajout groupé (avec contrôle de capacité des tables), groupes.
+- **Placement** : plan de salle drag & drop, respect de la capacité (individuel et groupe), tables verrouillées (aucun mouvement entrant/sortant).
+- **Réception / check-in** : check-in individuel et groupé, mode hors-ligne avec synchronisation, walk-in, recherche.
+- **Statistiques** : graphiques Recharts (lazy-loaded).
+- **Exports** : CSV (protection anti-injection), PDF (master-book, table-sheets, table-lists, catering-summary avec head counts présents/invités) et DOCX.
 
 ---
 
-### 5.3. Phase 2 — Problèmes IMPORTANTS (⚠️) — À corriger dans le mois
-
-| #   | Élément                     | Action requise                                                                                                                                                         |
-| --- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 13  | **Skeleton screens**        | Ajouter des squelettes pour toutes les pages client (guests, tables, stats, reception) au lieu des spinners ou écrans vides.                                           |
-| 14  | **Navigation latérale**     | Ajouter un sidebar ou top nav dans l'espace événement avec les 6 sections (Invités, Tables, Plan, Stats, Rapports, Paramètres). L'utilisateur doit naviguer en 1 clic. |
-| 15  | **Breadcrumbs**             | Implémenter sur toutes les pages profondes (`/event/[id]/guests`, `/event/[id]/placement`, etc.) pour montrer le chemin : `Dashboard > Mon Événement > Invités`.       |
-| 16  | **Password strength meter** | Ajouter un indicateur de force sur la page d'inscription et le changement de mot de passe (profil > sécurité).                                                         |
-| 17  | **Profile form**            | Refactoriser le formulaire de profil (3 onglets, 722 lignes) avec `react-hook-form` + `zod` au lieu de `useState` pur. Ajouter validation et gestion d'erreur.         |
-| 18  | **Guest modal**             | Refactoriser le modal d'ajout/édition d'invité avec `react-hook-form` + `zod` au lieu de `useState` manuel.                                                            |
-| 19  | **Lazy-load Recharts**      | Utiliser `next/dynamic` avec `ssr: false` pour la page des statistiques (économie ~150KB).                                                                             |
-| 20  | **Lazy-load dnd-kit**       | Utiliser `next/dynamic` pour la page placement (économie ~40KB).                                                                                                       |
-| 21  | **Sticky header table**     | Ajouter `position: sticky; top: 0; z-index: 10;` sur `<thead>` pour que l'en-tête reste visible en scroll.                                                             |
-| 22  | **Color tokens unifiés**    | Centraliser les couleurs des exports PDF dans un fichier partagé (ne pas dupliquer `#C9A96E` 8+ fois).                                                                 |
-| 23  | **Logo dark mode**          | Créer `logo-dark.svg` et l'intégrer avec favicon dark.                                                                                                                 |
-| 24  | **Recharts accessibles**    | Ajouter `role="img"`, `aria-label`, et des descriptions textuelles cachées (`.sr-only`) pour chaque graphique.                                                         |
-
----
-
-### 5.4. Phase 3 — Améliorations (ℹ️) — À faire progressivement
-
-- Refactorer la page `reception` (1524 lignes) en 5‑6 composants séparés.
-- Refactorer la page `guests` (1093 lignes) en composants modulaires.
-- Uniformiser les sélecteurs : remplacer tous les `<select>` natifs par le composant `<Select>` custom accessible.
-- Ajouter une page 404 personnalisée avec le branding (gold, Playfair Display).
-- Remplacer toutes les animations `spring` par `tween` avec un easing custom pour plus de cohérence.
-- Vérifier que tous les éléments interactifs ont une taille de cible tactile ≥ 44px (Apple HIG) et ≥ 48px (Material Design) sur mobile.
-- Ajouter un `preconnect` pour les polices Google (même avec `next/font`).
-- Tester avec des utilisateurs naïfs pour identifier les frictions.
-
----
-
-### 5.5. Directives permanentes pour l'Agent IA
-
-- **Avant d'ajouter une nouvelle fonctionnalité** : vérifier que tous les items Phase 1 sont corrigés.
-- **Lors du développement** : utiliser `useReducedMotion()` pour chaque composant animé (Framer Motion). Conditionner les animations : `const prefersReducedMotion = useReducedMotion();`.
-- **Pour les couleurs** : préférer les CSS custom properties (`var(--gold)`) aux valeurs hexadécimales en dur. Centraliser les couleurs utilisées dans les graphiques Recharts.
-- **Pour l'accessibilité** : ajouter systématiquement des `aria-label` sur les boutons icône, `aria-describedby` sur les champs en erreur, et des IDs générés avec `useId()` pour les dialogs.
-- **Pour les formulaires** : utiliser `react-hook-form` + `zod` pour tous les nouveaux formulaires, et refactoriser progressivement les existants.
-- **Pour le responsive** : tester sur mobile (iPhone SE, 320px) avant de pousser. S'assurer que les tableaux sont scrollables et que les zones tactiles sont ≥ 44px.
-- **Pour le loading** : préférer les squelettes (skeleton screens) aux spinners. Les squelettes améliorent la perception de performance de 300%.
-
----
-
-## 📂 6. Architecture et arborescence (proposée)
+## 📂 5. Architecture & arborescence
 
 ```
 src/
@@ -163,110 +87,111 @@ src/
 │   ├── (auth)/
 │   │   ├── login/page.tsx
 │   │   ├── register/page.tsx
+│   │   ├── forgot-password/page.tsx   # Réinit mot de passe (demande)
+│   │   ├── reset-password/page.tsx    # Réinit mot de passe (nouveau mdp)
 │   │   └── auth/callback/route.ts
 │   ├── (dashboard)/
+│   │   ├── layout.tsx                 # (racine pass-through)
 │   │   ├── dashboard/
-│   │   │   ├── page.tsx          # Mes événements
-│   │   │   ├── create/page.tsx   # Création événement
-│   │   │   ├── archived/page.tsx # Événements archivés
-│   │   │   └── profile/page.tsx  # Profil utilisateur
+│   │   │   ├── page.tsx               # Mes événements
+│   │   │   ├── create/page.tsx        # Création événement
+│   │   │   ├── archived/page.tsx      # Événements archivés
+│   │   │   └── profile/page.tsx       # Profil utilisateur
 │   │   └── event/[eventId]/
-│   │       ├── page.tsx          # Détail événement
-│   │       ├── guests/page.tsx   # Gestion invités
-│   │       ├── tables/page.tsx   # Gestion tables
-│   │       ├── placement/page.tsx # Plan de salle DnD
-│   │       ├── dashboard/page.tsx # Statistiques
-│   │       ├── reports/page.tsx  # Exports PDF/DOCX
-│   │       └── settings/page.tsx # Paramètres + zones
+│   │       ├── layout.tsx             # Garde d'accès (requireEventAccess)
+│   │       ├── page.tsx               # Détail événement
+│   │       ├── guests/page.tsx        # Gestion invités
+│   │       ├── tables/page.tsx        # Gestion tables
+│   │       ├── placement/page.tsx     # Plan de salle DnD
+│   │       ├── dashboard/page.tsx     # Statistiques
+│   │       ├── reports/page.tsx       # Exports PDF/DOCX
+│   │       └── settings/page.tsx      # Paramètres + zones
 │   ├── (reception)/
 │   │   └── reception/[eventId]/page.tsx # Check-in
 │   ├── api/reports/[eventId]/
-│   │   ├── master-book/route.ts
-│   │   ├── table-sheets/route.ts
-│   │   ├── catering-summary/route.ts
+│   │   ├── master-book/route.tsx
+│   │   ├── table-sheets/route.tsx
+│   │   ├── catering-summary/route.tsx
 │   │   ├── csv/route.ts
-│   │   ├── table-lists/route.ts
-│   │   └── table-lists-docx/route.ts
-│   ├── page.tsx                  # Landing page
-│   └── layout.tsx                # Layout racine
+│   │   ├── table-lists/route.tsx
+│   │   └── table-lists-docx/route.tsx
+│   ├── error.tsx                      # Boundary d'erreur brandée
+│   ├── loading.tsx                    # Écran de chargement brandé
+│   ├── not-found.tsx                  # Page 404 brandée
+│   ├── page.tsx                       # Landing page
+│   └── layout.tsx                     # Layout racine
 ├── components/
-│   ├── ui/                       # 17 primitives design system
-│   │   ├── button.tsx, card.tsx, dialog.tsx, input.tsx,
-│   │   ├── textarea.tsx, select.tsx, checkbox.tsx,
-│   │   ├── radio.tsx, toggle.tsx, badge.tsx, tag.tsx,
-│   │   ├── avatar.tsx, tooltip.tsx, spinner.tsx,
-│   │   ├── sonner.tsx, divider.tsx, label.tsx
-│   │   └── ...
-│   └── (components métier à isoler)
+│   ├── ui/                            # Primitives design system
+│   ├── event/event-status-badge.tsx   # Statut événement côté client (fuseau)
+│   ├── reception/stat-panel.tsx       # Panneau de stats (check-in)
+│   ├── pwa/register-service-worker.tsx # Enregistrement SW (prod)
+│   └── ...
 ├── lib/
-│   ├── dal/                      # Data Access Layer
-│   │   ├── events.ts, guests.ts, tables.ts
-│   ├── auth.ts                   # Helpers authentification
-│   ├── utils.ts                  # Fonctions utilitaires
-│   ├── pdf/                      # Templates PDF
-│   ├── docx/                     # Générateurs DOCX
-│   ├── supabase/                 # Clients Supabase
-│   │   ├── client.ts, server.ts, admin.ts (si existant)
-│   ├── store/                    # Zustand stores
-│   ├── hooks/                    # Custom hooks
-│   └── design-tokens/            # tokens.json + usage-guide.md
-├── proxy.ts                      # Middleware Next.js 16
-└── types/
-    └── database.types.ts         # Types Supabase générés
+│   ├── auth.ts                        # requireUser, requireEventAccess, AuthError
+│   ├── dal/events.ts, guests.ts, tables.ts
+│   ├── utils.ts, supabase/, pdf/, docx/, store/, hooks/
+├── proxy.ts                            # Middleware Next.js 16
+└── types/database.types.ts            # Types Supabase
 ```
 
 ---
 
-## 🗺 7. Roadmap (phases de développement)
+## 🗺 6. Roadmap
 
-1. **Phase 1 – Foundation** ✅ (terminé)
-2. **Phase 2 – Back-office** ✅ (terminé)
-3. **Phase 3 – Front-Desk** ✅ (terminé)
-4. **Phase 4 – Exports** ✅ (terminé)
-5. **Phase 5 – Audit & Corrections** ⏳ _(en cours)_
-   - Corriger les 12 items Phase 1 (critiques)
-   - Corriger les 12 items Phase 2 (importants)
-   - Mise en production
-6. **Phase 6 – Optimisations** (post‑production)
-   - Refactorisations, tests utilisateurs, documentation
+1. **Phase 1 – Foundation** ✅
+2. **Phase 2 – Back-office** ✅
+3. **Phase 3 – Front-Desk** ✅
+4. **Phase 4 – Exports** ✅
+5. **Phase 5 – Audit & Corrections** ✅ (corrections A1–A10 et B1–B6 terminées)
+6. **Phase 6 – Optimisations** ⏳ (en cours : PWA ✅, refactor réception, sélecteurs uniformisés, documentation)
 
 ---
 
-## 🔒 8. Sécurité & RLS
+## 🚶 Parcours utilisateur A→Z
 
-_(Conserver les politiques existantes)_
-
----
-
-## 🤖 9. Directives pour l'Agent IA (code, commentaires, commits)
-
-- **Référentiel unique :** Avant chaque action ou réponse, l'agent IA **doit** consulter ce fichier `project_info.md` comme miroir des décisions et spécifications. Il ne doit jamais s'en écarter sans validation explicite.
-- **Commentaires en français :** Chaque fonction, bloc logique, condition complexe doit être commenté en français, immédiatement après la déclaration ou le bloc. Le commentaire doit expliquer l'intention (pourquoi) et, si nécessaire, le fonctionnement (comment).
-- **Commits :** Aucun commit sans validation explicite. Messages en français, convention `[type] description courte`.
-- **Qualité de code :** TypeScript strict (pas de `any`). Server Components par défaut, Client Components (`'use client'`) pour l'interaction.
-- **Migrations Supabase :** L'agent ne doit **jamais** exécuter les migrations lui‑même. Il peut proposer des fichiers `.sql` dans `supabase/migrations/`, mais l'exécution est réservée à l'humain.
+1. **Inscription / connexion** — création de compte (`/register`) ou connexion (`/login`), avec réinitialisation du mot de passe (`/forgot-password` → `/reset-password`). Redirect sécurisé post-login.
+2. **Création d'un événement** — depuis le dashboard, formulaire (nom, date, lieu, description) ; l'événement apparaît avec un statut calculé selon le fuseau horaire du navigateur.
+3. **Configuration de la salle** — création des zones et tables (capacité, forme), verrouillage des tables pour figer le placement.
+4. **Gestion des invités** — ajout individuel, ajout groupé (avec contrôle de capacité), import CSV (mapping de colonnes), édition, groupes ; filtres par statut/âge/table avec pagination.
+5. **Placement des tables** — plan de salle drag & drop (`@dnd-kit`), respect des capacités individuelle et par groupe, tables verrouillées immuables.
+6. **Jour J : réception / check-in** — recherche rapide d'un invité, check-in individuel et groupé, walk-in (ajout sur place), mode hors-ligne avec synchronisation (Zustand), raccourcis clavier, statistiques de présence en temps réel.
+7. **Rapports & exports** — PDF (master-book, table-sheets, table-lists, catering-summary) et DOCX (table-lists), CSV protégé anti-injection.
+8. **Archivage** — les événements terminés peuvent être archivés et consultés dans la section dédiée.
 
 ---
 
-## 📌 10. Audit UX/UI – Résumé des points critiques (référence rapide)
+## 🔐 PWA (Installation & Hors-ligne)
 
-| Priorité | Élément             | Action                                        |
-| -------- | ------------------- | --------------------------------------------- |
-| 🚨       | Sonner              | Définir `--popover` et `--popover-foreground` |
-| 🚨       | Contraste gold      | Texte des boutons → `text-deep-black`         |
-| 🚨       | `--text-secondary`  | Passer à `#505050`                            |
-| 🚨       | Reduced motion      | Ajouter `useReducedMotion()` partout          |
-| 🚨       | `id="dialog-title"` | Remplacer par `useId()`                       |
-| 🚨       | `next/font`         | Utiliser `var(--font-inter)`                  |
-| 🚨       | `--input`           | Définir dans `:root` et `.dark`               |
-| 🚨       | Table mobile        | Ajouter `overflow-x-auto`                     |
-| 🚨       | Recharts            | Couleurs centralisées                         |
-| 🚨       | Aria-label          | Ajouter sur boutons icône                     |
-| ⚠️       | Skeleton screens    | Ajouter pour toutes les pages client          |
-| ⚠️       | Navigation latérale | Sidebar dans l'espace événement               |
+- **Manifest** : `src/app/manifest.ts` (route `/manifest.webmanifest` générée par Next.js) — `start_url: "/dashboard"`, `display: "standalone"`, `background_color: "#1A1A1A"`, `theme_color: "#C9A96E"`.
+- **Icônes** : `public/icons/icon-192.png`, `public/icons/icon-512.png`, `public/icons/apple-touch-icon.png` (générées depuis `public/logo.svg` via sharp).
+- **Service Worker** : `public/sw.js` (version `guest-manager-v1`) — réseau d'abord pour les navigations (données dynamiques + RLS), *stale-while-revalidate* pour les assets statiques, handlers `push` et `notificationclick` prêts (activation VAPID à venir).
+- **Enregistrement** : `src/components/pwa/register-service-worker.tsx`, uniquement en production.
+- **Headers** : `/sw.js` servie avec `Service-Worker-Allowed: /` et `Cache-Control: no-cache` (`next.config.ts`).
+- **Installation** : l'app est installable sur Android/iOS/Desktop via le bouton « Ajouter à l'écran d'accueil ».
 
 ---
 
-_Ce document est vivant ; il évoluera avec le projet. Toute modification devra être discutée et validée en équipe._
+## 🔒 7. Sécurité & RLS
+
+- **RLS activée** sur toutes les tables (events, zones, tables, guests, event_staff), via fonctions `SECURITY DEFINER` (`is_owner_of_event`, `is_staff_of_event`, `is_admin_of_event`).
+- Lecture : propriétaire ou membre du staff. Écriture métadonnées : propriétaire/admin. Hôtes : inscription d'invités, mise à jour restreinte (présence / heure / notes).
+- **Contrôle serveur** : `requireEventAccess` appliqué sur toutes les pages d'un événement (layout) et sur chaque route API de rapport, avec garde anti-open-redirect sur le login et protection CSV (OWASP).
+- Les migrations sont exécutées manuellement (jamais par l'agent).
+
+---
+
+## 🤖 8. Directives pour l'Agent IA
+
+- **Référentiel unique :** consulter ce fichier avant chaque action ; ne pas s'en écarter sans validation.
+- **Commentaires en français** sur chaque fonction et bloc logique (expliquer l'intention).
+- **Commits :** aucun commit sans validation explicite. Messages en français, format `[type] description courte`.
+- **Qualité de code :** TypeScript strict (pas d'`any`), Server Components par défaut, `'use client'` pour l'interaction, `tsc --noEmit` + `eslint` sans erreur avant validation.
+- **Accessibilité :** `aria-label` sur les boutons icône, `useId()` pour les dialogs, `useReducedMotion()` pour toute animation.
+- **Formulaires :** React Hook Form + Zod.
+- **Migrations :** proposer des fichiers `.sql` uniquement ; l'exécution est réservée à l'humain.
+
+---
+
+_Ce document est vivant ; il évoluera avec le projet._
 
 **Fait avec ❤️ pour des réceptions inoubliables.**

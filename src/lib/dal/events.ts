@@ -1,7 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import type { Database } from "@/types/database.types";
-
-type Event = Database["public"]["Tables"]["events"]["Row"];
 
 export async function getEventById(eventId: string) {
   const supabase = await createClient();
