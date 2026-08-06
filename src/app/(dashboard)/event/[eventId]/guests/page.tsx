@@ -394,15 +394,7 @@ useEffect(() => {
     }
   };
 
-// Calcule la capacité restante d'une table
-  const getTableAvailable = (tableId: string) => {
-    const table = tables.find((t) => t.id === tableId);
-    if (!table) return 0;
-    const placed = guests.filter((g) => g.table_id === tableId).length;
-    return table.capacity - placed;
-  };
-
-  // Nombre d'invités placés par table (utilisé pour la validation de capacité dans le bulk add)
+// Nombre d'invités placés par table (utilisé pour la validation de capacité dans le bulk add)
   const tableCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const g of guests) {
@@ -412,6 +404,18 @@ useEffect(() => {
     }
     return counts;
   }, [guests]);
+
+  // Capacité restante d'une table, dérivée du comptage mémorisé ci-dessus
+  const tableAvailable = useMemo(() => {
+    const result: Record<string, number> = {};
+    for (const t of tables) {
+      result[t.id] = t.capacity - (tableCounts[t.id] ?? 0);
+    }
+    return result;
+  }, [tables, tableCounts]);
+
+  // Calcule la capacité restante d'une table
+  const getTableAvailable = (tableId: string) => tableAvailable[tableId] ?? 0;
 
   // Filtres
   const filtered = guests.filter((g) => {
@@ -492,7 +496,9 @@ const executeImport = async () => {
       reverseMap[dbField] = csvCol;
     }
 
-    for (const row of csvData) {
+    const rowsToInsert: (Database["public"]["Tables"]["guests"]["Insert"] & { event_id: string })[] = [];
+
+for (const row of csvData) {
       try {
         const get = (field: string) => {
           const colIndex = reverseMap[field];
@@ -508,19 +514,34 @@ const executeImport = async () => {
           continue;
         }
 
-        await supabase.from("guests").insert({
+        rowsToInsert.push({
           event_id: eventId,
           first_name: firstName,
           last_name: lastName,
-category: get("category") || null,
+          category: get("category") || null,
           age_type: (get("age_type") as "adult" | "child" | "baby") || "adult",
           group_name: get("group_name") || null,
           dietary_notes: get("dietary_notes") || null,
           notes: get("notes") || null,
         });
-        success++;
       } catch {
         errors++;
+      }
+    }
+
+    // Insertion groupée : UNE seule requête au lieu d'une par ligne (évite le N+1)
+    if (rowsToInsert.length > 0) {
+      try {
+        const { error } = await supabase.from("guests").insert(rowsToInsert);
+        if (error) {
+          toast.error(error.message);
+          errors += rowsToInsert.length;
+          rowsToInsert.length = 0;
+        } else {
+          success = rowsToInsert.length;
+        }
+      } catch {
+        errors += rowsToInsert.length;
       }
     }
 

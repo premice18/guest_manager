@@ -8,6 +8,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
+import { isSafeRedirect } from "@/lib/redirect";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -70,13 +71,12 @@ export default function LoginPage() {
   const supabase = createClient();
   const [showPassword, setShowPassword] = useState(false);
   // Route d'origine (fournie par le proxy) pour y revenir après connexion
+  // Seuls les chemins locaux sûrs sont acceptés (même logique que le callback)
   const nextPath =
     typeof window !== "undefined"
       ? new URLSearchParams(window.location.search).get("next")
       : null;
-  const redirectTo = nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//")
-    ? nextPath
-    : "/dashboard";
+  const redirectTo = nextPath && isSafeRedirect(nextPath) ? nextPath : "/dashboard";
 
   const {
     register,

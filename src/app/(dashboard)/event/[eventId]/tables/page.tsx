@@ -284,23 +284,33 @@ useEffect(() => {
     const newIndex = index + direction;
     if (newIndex < 0 || newIndex >= tables.length) return;
 
+    const original = tables;
     const updated = [...tables];
     const temp = updated[index].sort_order;
     updated[index] = { ...updated[index], sort_order: updated[newIndex].sort_order };
     updated[newIndex] = { ...updated[newIndex], sort_order: temp };
     updated.sort((a, b) => a.sort_order - b.sort_order);
 
+    // Mise à jour optimiste locale
+    setTables(updated);
+
     try {
-      await supabase
+      const { error: errA } = await supabase
         .from("tables")
         .update({ sort_order: updated[index].sort_order })
         .eq("id", updated[index].id);
-      await supabase
+      const { error: errB } = await supabase
         .from("tables")
         .update({ sort_order: updated[newIndex].sort_order })
         .eq("id", updated[newIndex].id);
-      setTables(updated);
+
+      if (errA || errB) {
+        // Rollback si l'une des deux écritures a échoué
+        setTables(original);
+        toast.error(errA?.message ?? errB?.message ?? "Erreur lors du réordonnancement");
+      }
     } catch {
+      setTables(original);
       toast.error("Erreur lors du réordonnancement");
     }
   };

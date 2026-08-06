@@ -23,11 +23,19 @@ interface PendingAction {
   };
 }
 
-interface ReceptionState {
+// Cache des invités d'UN événement. Le store est scopé par eventId pour
+// garantir qu'aucune donnée d'un événement ne puisse fuir dans un autre.
+interface EventGuests {
   guests: Record<string, Guest>;
-  setGuests: (guests: Guest[]) => void;
-  updateGuest: (id: string, updates: Partial<Guest>) => void;
-  removeGuest: (id: string) => void;
+  totalGuests: number;
+  presentCount: number;
+}
+
+interface ReceptionState {
+  events: Record<string, EventGuests>;
+  setGuests: (eventId: string, guests: Guest[]) => void;
+  updateGuest: (eventId: string, id: string, updates: Partial<Guest>) => void;
+  removeGuest: (eventId: string, id: string) => void;
 
   pendingActions: PendingAction[];
   addPendingAction: (action: PendingAction) => void;
@@ -36,61 +44,66 @@ interface ReceptionState {
 
   isOnline: boolean;
   setOnline: (online: boolean) => void;
-
-  totalGuests: number;
-  presentCount: number;
-  setCounts: (total: number, present: number) => void;
 }
 
-// Store Zustand avec persistance locale pour le mode hors-ligne
+const emptyEvent = (): EventGuests => ({
+  guests: {},
+  totalGuests: 0,
+  presentCount: 0,
+});
+
+// Construit un état événement à partir du cache, en recalculant les compteurs
+function buildEvent(guests: Record<string, Guest>): EventGuests {
+  const all = Object.values(guests);
+  return {
+    guests,
+    totalGuests: all.length,
+    presentCount: all.filter((g) => g.is_present).length,
+  };
+}
+
+// Store Zustand avec persistance locale pour le mode hors-ligne.
+// Les données sont scopées par événement : plus aucune fuite inter-événements.
 export const useReceptionStore = create<ReceptionState>()(
   persist(
     (set, get) => ({
-      guests: {},
-      totalGuests: 0,
-      presentCount: 0,
-      isOnline: true,
+      events: {},
       pendingActions: [],
+      isOnline: true,
 
-      // Charge la liste complète des invités dans le cache local
-      setGuests: (guests) => {
+      // Charge la liste complète des invités d'un événement dans le cache local
+      setGuests: (eventId, guests) => {
         const map: Record<string, Guest> = {};
         for (const g of guests) {
           map[g.id] = g;
         }
         set({
-          guests: map,
-          totalGuests: guests.length,
-          presentCount: guests.filter((g) => g.is_present).length,
+          events: { ...get().events, [eventId]: buildEvent(map) },
         });
       },
 
       // Met à jour un invité dans le cache (via Realtime ou action locale).
       // Si l'invité est inconnu du cache (walk-in depuis un autre poste), il est ajouté.
-      updateGuest: (id, updates) => {
-        const guests = { ...get().guests };
+      updateGuest: (eventId, id, updates) => {
+        const prev = get().events[eventId] ?? emptyEvent();
+        const guests = { ...prev.guests };
         if (guests[id]) {
           guests[id] = { ...guests[id], ...updates };
         } else {
           guests[id] = updates as Guest;
         }
-        const allGuests = Object.values(guests);
         set({
-          guests,
-          totalGuests: allGuests.length,
-          presentCount: allGuests.filter((g) => g.is_present).length,
+          events: { ...get().events, [eventId]: buildEvent(guests) },
         });
       },
 
       // Retire un invité du cache (invité supprimé dans une autre interface)
-      removeGuest: (id) => {
-        const guests = { ...get().guests };
+      removeGuest: (eventId, id) => {
+        const prev = get().events[eventId] ?? emptyEvent();
+        const guests = { ...prev.guests };
         delete guests[id];
-        const allGuests = Object.values(guests);
         set({
-          guests,
-          totalGuests: allGuests.length,
-          presentCount: allGuests.filter((g) => g.is_present).length,
+          events: { ...get().events, [eventId]: buildEvent(guests) },
         });
       },
 
@@ -109,24 +122,25 @@ export const useReceptionStore = create<ReceptionState>()(
       clearPendingActions: () => set({ pendingActions: [] }),
 
       setOnline: (online) => set({ isOnline: online }),
-
-      setCounts: (total, present) => set({ totalGuests: total, presentCount: present }),
     }),
     {
       name: "reception-storage",
-      // Persiste aussi les compteurs pour un affichage correct après rechargement hors-ligne
+      // Ne persiste PAS les invités (PII : noms, régimes, allergies, données
+      // santé) en localStorage afin d'éviter une exfiltration massive en cas
+      // de XSS (recommandation audit sécurité). Seules les actions de
+      // check-in effectuées hors-ligne sont conservées, et uniquement le
+      // temps nécessaire à leur synchronisation.
       partialize: (state) => ({
-        guests: state.guests,
         pendingActions: state.pendingActions,
-        totalGuests: state.totalGuests,
-        presentCount: state.presentCount,
       }),
-      // Recalcule les compteurs au rechargement pour garantir la cohérence avec le cache
+      // Recalcule les compteurs au rechargement pour garantir la cohérence
       onRehydrateStorage: () => (state) => {
         if (!state) return;
-        const allGuests = Object.values(state.guests ?? {});
-        state.totalGuests = allGuests.length;
-        state.presentCount = allGuests.filter((g) => g.is_present).length;
+        const events = state.events ?? {};
+        for (const key of Object.keys(events)) {
+          events[key] = buildEvent(events[key]?.guests ?? {});
+        }
+        state.events = events;
       },
     }
   )
