@@ -354,6 +354,9 @@ export default function PlacementPage({
         toast.error(error.message);
         return;
       }
+      // Réconcilie avec le serveur après succès pour refléter les changements
+      // faits par d'autres clients (l'optimistic seul peut devenir obsolète).
+      refreshData();
     } catch {
       // Rollback réseau
       setAllGuests(prevGuests);
@@ -439,7 +442,10 @@ export default function PlacementPage({
         setAllGuests(prevGuests);
         refreshData();
         toast.error(error.message);
+        return;
       }
+      // Réconcilie avec le serveur après succès (autres clients, verrous).
+      refreshData();
     } catch {
       setAllGuests(prevGuests);
       refreshData();

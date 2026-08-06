@@ -2,7 +2,7 @@
   <img src="public/logo.svg" alt="Guest Manager" width="120" height="120" />
 </p>
 
-<h1 align="center">🥂 Guest Manager</h1>
+<h1 align="center">Guest Manager</h1>
 
 <p align="center">
   <em>“L’art de recevoir, simplifié.”</em>
@@ -23,7 +23,7 @@
 
 ---
 
-## 📖 Présentation
+## Présentation
 
 **Guest Manager** est une application web professionnelle dédiée à la gestion d'invités pour des événements haut de gamme — mariages, galas, soirées d'entreprise. Elle couvre l'intégralité du cycle de vie d'un événement :
 
@@ -35,40 +35,40 @@
 
 ---
 
-## ✨ Fonctionnalités
+## Fonctionnalités
 
-| Fonctionnalité | Description |
-|---|---|
-| 👥 **Gestion des invités** | CRUD complet, groupes (couples/familles), recherche, filtres |
-| 📥 **Import/Export CSV** | Import avec mapping de colonnes, export brut ou filtré |
-| 🪑 **Plan de salle** | Drag & drop, validation de capacité, verrouillage de tables |
-| 📱 **Check-in temps réel** | Interface tablette, synchronisation multi-postes, mode hors-ligne |
-| 📊 **Tableau de bord** | KPI, courbe d'arrivées, répartition catégories, occupation des tables |
-| 📄 **Rapports PDF** | Master Book, fiches par table, synthèse traiteur, fiche de présence |
-| 🔐 **Sécurité** | Authentification Supabase, RLS, rôles admin/host |
-| 🔄 **Temps réel** | Supabase Realtime, mise à jour instantanée sur tous les écrans |
+| Fonctionnalité             | Description                                                           |
+| -------------------------- | --------------------------------------------------------------------- |
+| 👥 **Gestion des invités** | CRUD complet, groupes (couples/familles), recherche, filtres          |
+| 📥 **Import/Export CSV**   | Import avec mapping de colonnes, export brut ou filtré                |
+| 🪑 **Plan de salle**       | Drag & drop, validation de capacité, verrouillage de tables           |
+| 📱 **Check-in temps réel** | Interface tablette, synchronisation multi-postes, mode hors-ligne     |
+| 📊 **Tableau de bord**     | KPI, courbe d'arrivées, répartition catégories, occupation des tables |
+| 📄 **Rapports PDF**        | Master Book, fiches par table, synthèse traiteur, fiche de présence   |
+| 🔐 **Sécurité**            | Authentification Supabase, RLS, rôles admin/host                      |
+| 🔄 **Temps réel**          | Supabase Realtime, mise à jour instantanée sur tous les écrans        |
 
 ---
 
 ## 🛠 Stack technique
 
-| Technologie | Utilisation |
-|---|---|
-| [Next.js 16](https://nextjs.org/) (App Router) | Framework React full-stack |
-| [TypeScript](https://www.typescriptlang.org/) (strict) | Typage statique |
-| [Supabase](https://supabase.com/) | Base de données PostgreSQL, Auth, Realtime |
-| [Tailwind CSS v4](https://tailwindcss.com/) | Styling utilitaire |
-| [shadcn/ui](https://ui.shadcn.com/) | Composants UI (Radix primitives) |
-| [Zustand](https://zustand-demo.pmnd.rs/) | État client avec persistance offline |
-| [React Hook Form](https://react-hook-form.com/) + [Zod](https://zod.dev/) | Formulaires typés et validation |
-| [@react-pdf/renderer](https://react-pdf.org/) | Génération de PDF côté serveur |
-| [Recharts](https://recharts.org/) | Graphiques interactifs |
-| [Framer Motion](https://www.framer.com/motion/) | Animations fluides |
-| [@dnd-kit](https://dndkit.com/) | Drag & drop accessible |
+| Technologie                                                               | Utilisation                                |
+| ------------------------------------------------------------------------- | ------------------------------------------ |
+| [Next.js 16](https://nextjs.org/) (App Router)                            | Framework React full-stack                 |
+| [TypeScript](https://www.typescriptlang.org/) (strict)                    | Typage statique                            |
+| [Supabase](https://supabase.com/)                                         | Base de données PostgreSQL, Auth, Realtime |
+| [Tailwind CSS v4](https://tailwindcss.com/)                               | Styling utilitaire                         |
+| [shadcn/ui](https://ui.shadcn.com/)                                       | Composants UI (Radix primitives)           |
+| [Zustand](https://zustand-demo.pmnd.rs/)                                  | État client avec persistance offline       |
+| [React Hook Form](https://react-hook-form.com/) + [Zod](https://zod.dev/) | Formulaires typés et validation            |
+| [@react-pdf/renderer](https://react-pdf.org/)                             | Génération de PDF côté serveur             |
+| [Recharts](https://recharts.org/)                                         | Graphiques interactifs                     |
+| [Framer Motion](https://www.framer.com/motion/)                           | Animations fluides                         |
+| [@dnd-kit](https://dndkit.com/)                                           | Drag & drop accessible                     |
 
 ---
 
-## 🚀 Installation
+## Installation
 
 ### Prérequis
 
@@ -98,7 +98,7 @@ Ouvrir [http://localhost:3000](http://localhost:3000) 🎉
 
 ---
 
-## 📁 Structure du projet
+## Structure du projet
 
 ```
 guest-manager/
@@ -126,46 +126,34 @@ guest-manager/
 
 ---
 
-## 🧪 Scripts disponibles
+## Scripts disponibles
 
-| Commande | Description |
-|---|---|
-| `npm run dev` | Serveur de développement (Turbopack) |
-| `npm run build` | Build de production |
-| `npm run start` | Lancement du serveur de production |
-| `npm run lint` | Vérification ESLint |
-
----
-
-## 📸 Aperçu
-
-| Page | Description |
-|---|---|
-| **Landing page** | Vitrine avec présentation des fonctionnalités |
-| **Dashboard** | Liste des événements avec cartes et statuts |
-| **Gestion invités** | CRUD, filtres, import/export CSV |
-| **Plan de salle** | Drag & drop avec validation |
-| **Check-in** | Interface tablette temps réel |
-| **Statistiques** | Graphiques, KPI, alertes |
-| **Rapports** | Génération PDF (Master Book, fiches tables, traiteur) |
+| Commande        | Description                          |
+| --------------- | ------------------------------------ |
+| `npm run dev`   | Serveur de développement (Turbopack) |
+| `npm run build` | Build de production                  |
+| `npm run start` | Lancement du serveur de production   |
+| `npm run lint`  | Vérification ESLint                  |
 
 ---
 
-## 🤝 Contribution
+## Aperçu
+
+| Page                | Description                                           |
+| ------------------- | ----------------------------------------------------- |
+| **Landing page**    | Vitrine avec présentation des fonctionnalités         |
+| **Dashboard**       | Liste des événements avec cartes et statuts           |
+| **Gestion invités** | CRUD, filtres, import/export CSV                      |
+| **Plan de salle**   | Drag & drop avec validation                           |
+| **Check-in**        | Interface tablette temps réel                         |
+| **Statistiques**    | Graphiques, KPI, alertes                              |
+| **Rapports**        | Génération PDF (Master Book, fiches tables, traiteur) |
+
+---
+
+## Contribution
 
 Les contributions sont les bienvenues ! Veuillez consulter le fichier [`project_info.md`](./project_info.md) pour comprendre les décisions d'architecture et les conventions de code.
-
-### Règles
-- Commentaires en français
-- TypeScript strict (pas de `any`)
-- Pas de commit direct sans validation
-- Consulter `project_info.md` avant chaque décision
-
----
-
-## 📄 Licence
-
-Ce projet est sous licence **MIT**. Voir le fichier [LICENSE](LICENSE).
 
 ---
 
