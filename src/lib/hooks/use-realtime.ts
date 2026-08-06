@@ -48,7 +48,7 @@ export function useRealtimeGuests(eventId: string) {
           if (!newGuest?.id) return;
           // Recharge l'invité complet pour obtenir le nom de sa table
           const fresh = await refetchGuest(eventId, newGuest.id);
-          updateGuest(newGuest.id, (fresh ?? newGuest) as Guest);
+          updateGuest(eventId, newGuest.id, (fresh ?? newGuest) as Guest);
         }
       )
       .on(
@@ -67,11 +67,11 @@ export function useRealtimeGuests(eventId: string) {
           if (previous && previous.table_id !== updatedGuest.table_id) {
             const fresh = await refetchGuest(eventId, updatedGuest.id);
             if (fresh) {
-              updateGuest(updatedGuest.id, fresh as Guest);
+              updateGuest(eventId, updatedGuest.id, fresh as Guest);
               return;
             }
           }
-          updateGuest(updatedGuest.id, updatedGuest);
+          updateGuest(eventId, updatedGuest.id, updatedGuest);
         }
       )
       .on(
@@ -85,7 +85,7 @@ export function useRealtimeGuests(eventId: string) {
         (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
           const oldGuest = payload.old as Guest | null;
           if (oldGuest?.id) {
-            removeGuest(oldGuest.id);
+            removeGuest(eventId, oldGuest.id);
           }
         }
       )

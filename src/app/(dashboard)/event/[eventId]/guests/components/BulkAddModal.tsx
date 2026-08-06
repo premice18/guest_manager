@@ -541,8 +541,6 @@ export default function BulkAddModal({
               </thead>
               <tbody>
                 {rows.map((row, idx) => {
-                  const table = tables.find((t) => t.id === row.tableId);
-                  const available = table ? table.capacity : 0;
                   const isCouple = row.type === "couple";
 
                   return (
@@ -604,7 +602,7 @@ export default function BulkAddModal({
                           <SelectItem value="">Non placé</SelectItem>
                           {tables.map((t) => (
                             <SelectItem key={t.id} value={t.id}>
-                              {t.name} ({available} pl.)
+                              {t.name} ({t.capacity - guestCountByTable(t.id)} pl.)
                             </SelectItem>
                           ))}
                         </Select>

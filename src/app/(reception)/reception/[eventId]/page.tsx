@@ -115,15 +115,16 @@ export default function ReceptionPage({
   const [tables, setTables] = useState<Table[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const guestsMap = useReceptionStore((s) => s.guests);
+  const eventState = useReceptionStore((s) => s.events[eventId]);
   const setGuests = useReceptionStore((s) => s.setGuests);
   const updateGuest = useReceptionStore((s) => s.updateGuest);
-  const totalGuests = useReceptionStore((s) => s.totalGuests);
-  const presentCount = useReceptionStore((s) => s.presentCount);
   const isOnline = useReceptionStore((s) => s.isOnline);
   const pendingActions = useReceptionStore((s) => s.pendingActions);
   const addPendingAction = useReceptionStore((s) => s.addPendingAction);
   const removePendingAction = useReceptionStore((s) => s.removePendingAction);
+  const guestsMap = useMemo(() => eventState?.guests ?? {}, [eventState]);
+  const totalGuests = eventState?.totalGuests ?? 0;
+  const presentCount = eventState?.presentCount ?? 0;
 
   const [search, setSearch] = useState("");
   const [filterLetter, setFilterLetter] = useState("");
@@ -161,9 +162,9 @@ export default function ReceptionPage({
       const enriched = raw.map(
         ({ tables, ...g }) => ({ ...g, table_name: tables?.name ?? null }) as Guest,
       );
-      setGuests(enriched);
+      setGuests(eventId, enriched);
     },
-    [setGuests],
+    [eventId, setGuests],
   );
 
   const refreshGuests = useCallback(async () => {
@@ -280,7 +281,7 @@ export default function ReceptionPage({
     const newStatus = !guest.is_present;
     const timestamp = new Date().toISOString();
 
-    updateGuest(guest.id, {
+    updateGuest(eventId, guest.id, {
       is_present: newStatus,
       checked_in_at: newStatus ? timestamp : null,
     });
@@ -305,14 +306,14 @@ export default function ReceptionPage({
         .eq("id", guest.id);
 
       if (error) {
-        updateGuest(guest.id, {
+        updateGuest(eventId, guest.id, {
           is_present: guest.is_present,
           checked_in_at: guest.checked_in_at,
         });
         toast.error(error.message);
       }
     } catch {
-      updateGuest(guest.id, {
+      updateGuest(eventId, guest.id, {
         is_present: guest.is_present,
         checked_in_at: guest.checked_in_at,
       });
@@ -326,9 +327,26 @@ export default function ReceptionPage({
       (g) => g.group_id === groupId,
     );
 
+    // Sauvegarde l'état précédent pour pouvoir annuler en cas d'erreur
+    const previous = members.map((m) => ({
+      id: m.id,
+      is_present: m.is_present,
+      checked_in_at: m.checked_in_at,
+    }));
+
     for (const m of members) {
-      updateGuest(m.id, { is_present: true, checked_in_at: timestamp });
+      updateGuest(eventId, m.id, { is_present: true, checked_in_at: timestamp });
     }
+
+    // Annule la mise à jour optimiste (rollback) en cas d'échec
+    const rollback = () => {
+      for (const p of previous) {
+        updateGuest(eventId, p.id, {
+          is_present: p.is_present,
+          checked_in_at: p.checked_in_at,
+        });
+      }
+    };
 
     if (!isOnline) {
       for (const m of members) {
@@ -342,7 +360,7 @@ export default function ReceptionPage({
       return;
     }
 
-try {
+    try {
       const { error } = await supabase
         .from("guests")
         .update({ is_present: true, checked_in_at: timestamp })
@@ -350,10 +368,11 @@ try {
         .eq("event_id", eventId);
 
       if (error) {
+        rollback();
         toast.error(error.message);
-        await refreshGuests();
       }
     } catch {
+      rollback();
       toast.error("Erreur lors du check-in groupé");
     }
   };
@@ -531,12 +550,21 @@ for (const action of actions) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const getTableAvailable = (tableId: string) => {
-    const table = tables.find((t) => t.id === tableId);
-    if (!table) return 0;
-    const all = Object.values(guestsMap) as Guest[];
-    return table.capacity - all.filter((g) => g.table_id === tableId).length;
-  };
+  // Places disponibles par table, calculé en UNE passe sur les invités (évite
+  // le O(tables × guests) à chaque rendu).
+  const tablesAvailable = useMemo(() => {
+    const byTable: Record<string, number> = {};
+    for (const g of Object.values(guestsMap) as Guest[]) {
+      if (g.table_id) byTable[g.table_id] = (byTable[g.table_id] ?? 0) + 1;
+    }
+    const result: Record<string, number> = {};
+    for (const t of tables) {
+      result[t.id] = t.capacity - (byTable[t.id] ?? 0);
+    }
+    return result;
+  }, [guestsMap, tables]);
+
+  const getTableAvailable = (tableId: string) => tablesAvailable[tableId] ?? 0;
 
   // Stats enrichies
   const childrenCount = useMemo(
