@@ -12,12 +12,22 @@ interface PendingAction {
   guestId: string;
   type: "checkin" | "uncheckin";
   timestamp: string;
+  // Payload supplémentaire pour un walk-in créé hors-ligne
+  walkin?: {
+    first_name: string;
+    last_name: string;
+    category: string | null;
+    age_type: Guest["age_type"];
+    table_id: string | null;
+    notes: string | null;
+  };
 }
 
 interface ReceptionState {
   guests: Record<string, Guest>;
   setGuests: (guests: Guest[]) => void;
   updateGuest: (id: string, updates: Partial<Guest>) => void;
+  removeGuest: (id: string) => void;
 
   pendingActions: PendingAction[];
   addPendingAction: (action: PendingAction) => void;
@@ -55,15 +65,31 @@ export const useReceptionStore = create<ReceptionState>()(
         });
       },
 
-      // Met à jour un seul invité dans le cache (via Realtime ou action locale)
+      // Met à jour un invité dans le cache (via Realtime ou action locale).
+      // Si l'invité est inconnu du cache (walk-in depuis un autre poste), il est ajouté.
       updateGuest: (id, updates) => {
         const guests = { ...get().guests };
         if (guests[id]) {
           guests[id] = { ...guests[id], ...updates };
+        } else {
+          guests[id] = updates as Guest;
         }
         const allGuests = Object.values(guests);
         set({
           guests,
+          totalGuests: allGuests.length,
+          presentCount: allGuests.filter((g) => g.is_present).length,
+        });
+      },
+
+      // Retire un invité du cache (invité supprimé dans une autre interface)
+      removeGuest: (id) => {
+        const guests = { ...get().guests };
+        delete guests[id];
+        const allGuests = Object.values(guests);
+        set({
+          guests,
+          totalGuests: allGuests.length,
           presentCount: allGuests.filter((g) => g.is_present).length,
         });
       },
@@ -88,10 +114,20 @@ export const useReceptionStore = create<ReceptionState>()(
     }),
     {
       name: "reception-storage",
+      // Persiste aussi les compteurs pour un affichage correct après rechargement hors-ligne
       partialize: (state) => ({
         guests: state.guests,
         pendingActions: state.pendingActions,
+        totalGuests: state.totalGuests,
+        presentCount: state.presentCount,
       }),
+      // Recalcule les compteurs au rechargement pour garantir la cohérence avec le cache
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        const allGuests = Object.values(state.guests ?? {});
+        state.totalGuests = allGuests.length;
+        state.presentCount = allGuests.filter((g) => g.is_present).length;
+      },
     }
   )
 );

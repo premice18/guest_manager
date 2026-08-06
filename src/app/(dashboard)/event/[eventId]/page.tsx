@@ -1,6 +1,5 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
-import { requireUser } from "@/lib/auth";
 import { getEventById } from "@/lib/dal/events";
 import { getGuestStats } from "@/lib/dal/guests";
 import { getTableCounts } from "@/lib/dal/tables";
@@ -33,12 +32,6 @@ export default async function EventDetailPage({
 }) {
   const { eventId } = await params;
 
-  let user;
-  try {
-    user = await requireUser();
-  } catch {
-    redirect("/login");
-  }
   const event = await getEventById(eventId);
   if (!event) notFound();
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database.types";
@@ -48,8 +48,6 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 type Guest = Database["public"]["Tables"]["guests"]["Row"];
 type Table = Database["public"]["Tables"]["tables"]["Row"];
-
-const AGE_LABELS: Record<string, string> = { adult: "Adulte", child: "Enfant", baby: "Bébé" };
 
 const panelVariants = {
   hidden: { opacity: 0, x: -20 },
@@ -226,7 +224,7 @@ export default function PlacementPage({
 }) {
   const prefersReducedMotion = useReducedMotion();
   const [eventId, setEventId] = useState("");
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
   // Tous les invités (placés + non placés) pour permettre les transferts
   const [allGuests, setAllGuests] = useState<Guest[]>([]);
@@ -246,28 +244,56 @@ export default function PlacementPage({
   const [groupAlertOpen, setGroupAlertOpen] = useState(false);
   const [pendingDrop, setPendingDrop] = useState<{ guest: Guest; tableId: string } | null>(null);
 
-  // Charge les données initiales
-  const loadData = useCallback(async () => {
-    const id = await params.then((p) => p.eventId);
-    setEventId(id);
+// Charge les données initiales
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const id = await params.then((p) => p.eventId);
+      if (cancelled) return;
+      setEventId(id);
 
-    const { data: tbls } = await supabase
-      .from("tables")
-      .select("*")
-      .eq("event_id", id)
-      .order("sort_order");
+      const { data: tbls } = await supabase
+        .from("tables")
+        .select("*")
+        .eq("event_id", id)
+        .order("sort_order");
+      const rawTables = (tbls ?? []) as Table[];
+
+      const { data: gsts } = await supabase
+        .from("guests")
+        .select("*")
+        .eq("event_id", id)
+        .order("last_name");
+      const rawGuests = (gsts ?? []) as Guest[];
+
+      if (!cancelled) {
+        // Stocke TOUS les invités pour pouvoir gérer les transferts
+        setAllGuests(rawGuests);
+
+        setTables(
+          rawTables.map((t) => ({
+            ...t,
+            guest_count: rawGuests.filter((g) => g.table_id === t.id).length,
+            placed_guests: rawGuests.filter((g) => g.table_id === t.id),
+          }))
+        );
+        setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [params, supabase]);
+
+  const refreshData = async () => {
+    if (!eventId) return;
+    const [{ data: tbls }, { data: gsts }] = await Promise.all([
+      supabase.from("tables").select("*").eq("event_id", eventId).order("sort_order"),
+      supabase.from("guests").select("*").eq("event_id", eventId).order("last_name"),
+    ]);
     const rawTables = (tbls ?? []) as Table[];
-
-    const { data: gsts } = await supabase
-      .from("guests")
-      .select("*")
-      .eq("event_id", id)
-      .order("last_name");
     const rawGuests = (gsts ?? []) as Guest[];
-
-    // Stocke TOUS les invités pour pouvoir gérer les transferts
     setAllGuests(rawGuests);
-
     setTables(
       rawTables.map((t) => ({
         ...t,
@@ -275,12 +301,7 @@ export default function PlacementPage({
         placed_guests: rawGuests.filter((g) => g.table_id === t.id),
       }))
     );
-    setLoading(false);
-  }, [params, supabase]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  };
 
   // Exécute le déplacement avec mise à jour optimiste
   const executeDrop = async (guestId: string, tableId: string | null) => {
@@ -329,14 +350,14 @@ export default function PlacementPage({
       if (error) {
         // Rollback en cas d'erreur
         setAllGuests(prevGuests);
-        loadData();
+        refreshData();
         toast.error(error.message);
         return;
       }
     } catch {
       // Rollback réseau
       setAllGuests(prevGuests);
-      loadData();
+      refreshData();
       toast.error("Erreur lors du placement");
     }
   };
@@ -345,6 +366,35 @@ export default function PlacementPage({
   const executeGroupDrop = async (groupId: string, tableId: string | null) => {
     const prevGuests = [...allGuests];
     const groupMembers = allGuests.filter((g) => g.group_id === groupId);
+
+    // Un groupe ne peut pas quitter une table verrouillée
+    if (tableId) {
+      const sourceTableIds = new Set(
+        groupMembers.map((m) => m.table_id).filter((id): id is string => Boolean(id))
+      );
+      for (const sid of sourceTableIds) {
+        const sourceTable = tables.find((t) => t.id === sid);
+        if (sourceTable?.is_locked && sid !== tableId) {
+          toast.error(`🔒 La table "${sourceTable.name}" est verrouillée, le groupe ne peut pas être déplacé.`);
+          setAllGuests(prevGuests);
+          return;
+        }
+      }
+    }
+
+    // Vérifie la capacité cible : le groupe entier doit tenir sur la table
+    const targetTable = tableId ? tables.find((t) => t.id === tableId) : null;
+    if (targetTable) {
+      const groupSize = groupMembers.length;
+      const freeSeats = targetTable.capacity - targetTable.guest_count;
+      if (groupSize > freeSeats) {
+        toast.error(
+          `⚠️ La table "${targetTable.name}" n'a que ${freeSeats} place(s) libre(s) pour un groupe de ${groupSize}.`
+        );
+        setAllGuests(prevGuests);
+        return;
+      }
+    }
 
     // Met à jour l'état local pour tous les membres du groupe
     setAllGuests((prev) =>
@@ -387,12 +437,12 @@ export default function PlacementPage({
         .eq("group_id", groupId);
       if (error) {
         setAllGuests(prevGuests);
-        loadData();
+        refreshData();
         toast.error(error.message);
       }
     } catch {
       setAllGuests(prevGuests);
-      loadData();
+      refreshData();
       toast.error("Erreur lors du déplacement du groupe");
     }
   };
@@ -411,6 +461,11 @@ export default function PlacementPage({
     // Cas 1 : dépôt sur la zone "non placés" → retrait de la table
     if (dropId === "unplaced-zone") {
       if (!guest.table_id) return; // Déjà non placé
+      const sourceLocked = tables.find((t) => t.id === guest.table_id)?.is_locked;
+      if (sourceLocked) {
+        toast.error("🔒 Cet invité est sur une table verrouillée, il ne peut pas être retiré.");
+        return;
+      }
       toast.success(`${guest.first_name} ${guest.last_name} retiré de la table`);
       executeDrop(guest.id, null);
       return;
@@ -433,6 +488,15 @@ export default function PlacementPage({
 
     const sourceTableId = guest.table_id;
 
+    // Un invité placé sur une table verrouillée ne peut pas en sortir
+    const sourceTable = sourceTableId
+      ? tables.find((t) => t.id === sourceTableId)
+      : null;
+    if (sourceTable?.is_locked && tableId !== sourceTableId) {
+      toast.error(`🔒 La table "${sourceTable.name}" est verrouillée, cet invité ne peut pas être déplacé.`);
+      return;
+    }
+
     // Cas 3 : invité non placé → placement direct (pas de confirmation)
     if (!sourceTableId) {
       // Vérifie les contraintes de groupe
@@ -451,9 +515,6 @@ export default function PlacementPage({
 
     // Cas 4 : invité déjà placé sur une table → besoin de confirmation
     if (sourceTableId === tableId) return; // Même table → ignoré
-
-    const sourceTable = tables.find((t) => t.id === sourceTableId);
-    const sourceTableName = sourceTable?.name ?? "Table inconnue";
 
     // Vérifie si l'invité fait partie d'un groupe
     const otherGroupMembers = allGuests.filter(

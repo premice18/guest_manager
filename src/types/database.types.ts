@@ -40,7 +40,15 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "events_owner_id_fkey",
+            columns: ["owner_id"],
+            isOneToOne: false,
+            referencedRelation: "auth.users",
+            referencedColumns: ["id"],
+          },
+        ];
       };
       zones: {
         Row: {
@@ -64,7 +72,15 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "zones_event_id_fkey",
+            columns: ["event_id"],
+            isOneToOne: false,
+            referencedRelation: "events",
+            referencedColumns: ["id"],
+          },
+        ];
       };
       tables: {
         Row: {
@@ -103,7 +119,22 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "tables_event_id_fkey",
+            columns: ["event_id"],
+            isOneToOne: false,
+            referencedRelation: "events",
+            referencedColumns: ["id"],
+          },
+          {
+            foreignKeyName: "tables_zone_id_fkey",
+            columns: ["zone_id"],
+            isOneToOne: false,
+            referencedRelation: "zones",
+            referencedColumns: ["id"],
+          },
+        ];
       };
       guests: {
         Row: {
@@ -160,7 +191,22 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "guests_event_id_fkey",
+            columns: ["event_id"],
+            isOneToOne: false,
+            referencedRelation: "events",
+            referencedColumns: ["id"],
+          },
+          {
+            foreignKeyName: "guests_table_id_fkey",
+            columns: ["table_id"],
+            isOneToOne: false,
+            referencedRelation: "tables",
+            referencedColumns: ["id"],
+          },
+        ];
       };
       event_staff: {
         Row: {
@@ -184,11 +230,26 @@ export type Database = {
           role?: "admin" | "host";
           created_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "event_staff_event_id_fkey",
+            columns: ["event_id"],
+            isOneToOne: false,
+            referencedRelation: "events",
+            referencedColumns: ["id"],
+          },
+          {
+            foreignKeyName: "event_staff_user_id_fkey",
+            columns: ["user_id"],
+            isOneToOne: false,
+            referencedRelation: "auth.users",
+            referencedColumns: ["id"],
+          },
+        ];
       };
     };
-    Views: {};
-    Functions: {};
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
     Enums: {
       age_category: "adult" | "child" | "baby";
       table_shape: "round" | "rectangular" | "imperial";

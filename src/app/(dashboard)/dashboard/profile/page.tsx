@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Select, SelectItem } from "@/components/ui/select";
 import {
   Card,
   CardContent,
@@ -49,6 +50,48 @@ function stringToColor(str: string) {
   }
   const hue = hash % 360;
   return `hsl(${hue}, 55%, 75%)`;
+}
+
+// Évalue la force d'un mot de passe (0 à 4 critères)
+function scorePassword(password: string): number {
+  let score = 0;
+  if (password.length >= 8) score++;
+  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
+  if (/\d/.test(password)) score++;
+  if (/[^a-zA-Z0-9]/.test(password)) score++;
+  return score;
+}
+
+const STRENGTH_META = [
+  { label: "Faible", classes: "bg-error", text: "text-error" },
+  { label: "Moyen", classes: "bg-warning", text: "text-warning" },
+  { label: "Bon", classes: "bg-gold", text: "text-gold" },
+  { label: "Excellent", classes: "bg-success", text: "text-success" },
+];
+
+// Indicateur de force du mot de passe
+function PasswordStrength({ password }: { password: string }) {
+  const score = scorePassword(password);
+  const meta = STRENGTH_META[Math.min(score, 4) - 1] ?? STRENGTH_META[0];
+  return (
+    <div className="pt-1" aria-live="polite">
+      <div className="flex gap-1">
+        {[0, 1, 2, 3].map((i) => (
+          <span
+            key={i}
+            className={`h-1 flex-1 rounded-full transition-colors ${
+              i < score ? meta.classes : "bg-muted"
+            }`}
+          />
+        ))}
+      </div>
+      <p className={`mt-1 text-xs ${meta.text}`}>
+        {password.length < 6
+          ? "Au moins 6 caractères"
+          : `Force : ${meta.label}`}
+      </p>
+    </div>
+  );
 }
 
 // Page de profil administrateur
@@ -561,6 +604,9 @@ export default function ProfilePage() {
                           {showNew ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                         </button>
                       </div>
+                      {newPassword && (
+                        <PasswordStrength password={newPassword} />
+                      )}
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="confirm-password">Confirmer le mot de passe</Label>
@@ -643,15 +689,15 @@ export default function ProfilePage() {
 
                 <div className="space-y-3">
                   <Label htmlFor="lang">Langue</Label>
-                  <select
+                  <Select
                     id="lang"
                     value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
-                    className="h-11 w-full rounded-lg border border-input bg-transparent px-3 text-sm sm:w-48"
+                    onValueChange={setLanguage}
+                    className="sm:w-48"
                   >
-                    <option value="fr">Français</option>
-                    <option value="en">English</option>
-                  </select>
+                    <SelectItem value="fr">Français</SelectItem>
+                    <SelectItem value="en">English</SelectItem>
+                  </Select>
                 </div>
 
                 <label className="flex items-center gap-3 text-sm">

@@ -8,7 +8,7 @@ import {
   Text,
   StyleSheet,
 } from "@react-pdf/renderer";
-import type { TableWithGuestsExport, TableListGuest } from "./utils";
+import type { TableWithGuestsExport } from "./utils";
 import { getGroupSize, getGroupSizeMap } from "./utils";
 
 interface SimpleTableListProps {
@@ -148,11 +148,9 @@ const GuestTableHeader = () => (
 // Section d'une table individuelle
 function TableSection({
   table,
-  tableIndex,
   groupSizeMap,
 }: {
   table: TableWithGuestsExport;
-  tableIndex: number;
   groupSizeMap: Map<string | null, number>;
 }) {
   const guestsAtTable = table.guests;
@@ -257,11 +255,10 @@ export function SimpleTableListDocument({
           </Text>
         </View>
 
-        {tablesWithGuests.map((table, tIndex) => (
+        {tablesWithGuests.map((table) => (
           <TableSection
             key={table.id}
             table={table}
-            tableIndex={tIndex}
             groupSizeMap={groupSizeMap}
           />
         ))}

@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const authRoutes = ["/login", "/register"];
+const authRoutes = ["/login", "/register", "/forgot-password", "/reset-password"];
 const protectedRoutes = ["/dashboard", "/event", "/reception"];
 
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -54,7 +54,10 @@ export async function proxy(request: NextRequest) {
 
   // Redirige vers la page de connexion si non authentifié sur une route protégée
   if (isProtected && !user) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    // Conserve la route d'origine pour y revenir après connexion
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("next", pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
   // Redirige vers le dashboard si déjà connecté sur une page d'auth

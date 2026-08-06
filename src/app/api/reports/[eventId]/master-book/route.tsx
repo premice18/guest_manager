@@ -22,7 +22,7 @@ export async function GET(
 
     const { data: guests } = await supabase
       .from("guests")
-      .select("first_name, last_name, group_id, table_id, tables!inner(name)")
+      .select("first_name, last_name, group_id, table_id, tables(name)")
       .eq("event_id", parsedId.data)
       .order("last_name", { ascending: true })
       .order("first_name", { ascending: true });

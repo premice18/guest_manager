@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useRealtimeGuests } from "@/lib/hooks/use-realtime";
@@ -26,7 +26,7 @@ import {
   CheckCircle2,
   Clock,
 } from "lucide-react";
-import { cn, formatDate, formatTime } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { motion, useReducedMotion } from "framer-motion";
 import {
   AreaChart,
@@ -47,7 +47,6 @@ import {
 type Event = Database["public"]["Tables"]["events"]["Row"];
 type Guest = Database["public"]["Tables"]["guests"]["Row"];
 type TableRow = Database["public"]["Tables"]["tables"]["Row"];
-type Zone = Database["public"]["Tables"]["zones"]["Row"];
 
 // Variants d'animation pour les cartes KPI
 const kpiCardVariants = {
@@ -91,8 +90,23 @@ const AGE_BAR_COLORS = {
   presents: "#4CAF50",
 };
 
+// Type des payloads Recharts pour les tooltips personnalisés
+interface TooltipPayloadItem {
+  value?: number | string | Array<number | string>;
+  name?: string | number;
+  color?: string;
+  payload?: Record<string, unknown>;
+  dataKey?: string | number;
+}
+
+interface BaseTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayloadItem[];
+  label?: string | number;
+}
+
 // Tooltip personnalisé pour l'AreaChart (arrivées)
-function ArrivalsTooltip({ active, payload, label }: any) {
+function ArrivalsTooltip({ active, payload, label }: BaseTooltipProps) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-lg border border-border bg-white px-3 py-2 shadow-lg">
@@ -103,7 +117,7 @@ function ArrivalsTooltip({ active, payload, label }: any) {
 }
 
 // Tooltip personnalisé pour le PieChart (catégories)
-function CategoryTooltip({ active, payload }: any) {
+function CategoryTooltip({ active, payload }: BaseTooltipProps) {
   if (!active || !payload?.length) return null;
   const data = payload[0];
   return (
@@ -117,12 +131,12 @@ function CategoryTooltip({ active, payload }: any) {
 }
 
 // Tooltip personnalisé pour le BarChart (âges)
-function AgeTooltip({ active, payload, label }: any) {
+function AgeTooltip({ active, payload, label }: BaseTooltipProps) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-lg border border-border bg-white px-3 py-2 shadow-lg">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      {payload.map((entry: any, idx: number) => (
+      {payload.map((entry, idx) => (
         <p key={idx} className="text-sm font-bold" style={{ color: entry.color }}>
           {entry.name}: {entry.value}
         </p>
@@ -132,30 +146,19 @@ function AgeTooltip({ active, payload, label }: any) {
 }
 
 // Tooltip personnalisé pour le graphique occupation des tables
-function TableTooltip({ active, payload, label }: any) {
+function TableTooltip({ active, payload }: BaseTooltipProps) {
   if (!active || !payload?.length) return null;
-  const data = payload[0]?.payload;
+  const data = payload[0]?.payload as
+    | { name?: string; fill?: string; guests?: number; capacity?: number; percentage?: number }
+    | undefined;
   if (!data) return null;
   return (
     <div className="rounded-lg border border-border bg-white px-3 py-2 shadow-lg">
       <p className="text-xs font-medium text-muted-foreground">{data.name}</p>
       <p className="text-sm font-bold" style={{ color: data.fill }}>
-        {data.guests}/{data.capacity} ({Math.round(data.percentage)}%)
+        {data.guests}/{data.capacity} ({Math.round(data.percentage ?? 0)}%)
       </p>
     </div>
-  );
-}
-
-// Badge de statut d'occupation
-function OccupancyBadge({ percentage }: { percentage: number }) {
-  const color =
-    percentage >= 80 ? "text-green-600 bg-green-50 ring-green-200" :
-    percentage >= 50 ? "text-gold bg-gold/10 ring-gold/20" :
-    "text-red-600 bg-red-50 ring-red-200";
-  return (
-    <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1", color)}>
-      {Math.round(percentage)}%
-    </span>
   );
 }
 
@@ -167,12 +170,11 @@ export default function DashboardStatsPage({
 }) {
   const prefersReducedMotion = useReducedMotion();
   const [eventId, setEventId] = useState("");
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
   // Données chargées depuis Supabase
   const [event, setEvent] = useState<Event | null>(null);
   const [tables, setTables] = useState<TableRow[]>([]);
-  const [zones, setZones] = useState<Zone[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Store Zustand (invités en temps réel)
@@ -194,61 +196,61 @@ export default function DashboardStatsPage({
   }, [storeGuests, localGuests]);
 
   // Chargement initial des données
-  const loadData = useCallback(async () => {
-    const id = await params.then((p) => p.eventId);
-    setEventId(id);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const id = await params.then((p) => p.eventId);
+      if (cancelled) return;
+      setEventId(id);
 
-    const { data: ev } = await supabase
-      .from("events")
-      .select("*")
-      .eq("id", id)
-      .single();
-    if (ev) setEvent(ev);
+      const { data: ev } = await supabase
+        .from("events")
+        .select("*")
+        .eq("id", id)
+        .single();
+      if (!cancelled && ev) setEvent(ev);
 
-    const { data: tbls } = await supabase
-      .from("tables")
-      .select("*")
-      .eq("event_id", id)
-      .order("name");
-    setTables(tbls ?? []);
-
-    const { data: zns } = await supabase
-      .from("zones")
-      .select("*")
-      .eq("event_id", id)
-      .order("name");
-    setZones(zns ?? []);
-
-    // Charge les invités dans le store si vide
-    const storeValues = Object.values(useReceptionStore.getState().guests);
-    if (storeValues.length === 0) {
-      const { data: gsts } = await supabase
-        .from("guests")
+      const { data: tbls } = await supabase
+        .from("tables")
         .select("*")
         .eq("event_id", id)
-        .order("last_name");
-      const rawGuests = (gsts ?? []) as Guest[];
-      setLocalGuests(rawGuests);
-      setStoreGuests(rawGuests);
-    }
+        .order("name");
+      if (!cancelled) setTables(tbls ?? []);
 
-    setLoading(false);
+      // Charge les invités dans le store si vide
+      const storeValues = Object.values(useReceptionStore.getState().guests);
+      if (storeValues.length === 0) {
+        const { data: gsts } = await supabase
+          .from("guests")
+          .select("*")
+          .eq("event_id", id)
+          .order("last_name");
+        if (!cancelled) {
+          const rawGuests = (gsts ?? []) as Guest[];
+          setLocalGuests(rawGuests);
+          setStoreGuests(rawGuests);
+        }
+      }
+
+      if (!cancelled) setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [params, supabase, setStoreGuests]);
 
+  // Affiche une notification une fois les données initiales chargées
+  const didInitToast = useRef(false);
   useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  // Affiche une notification lors des mises à jour Realtime
-  useEffect(() => {
-    if (!loading) {
-      const total = guests.length;
-      const present = guests.filter((g) => g.is_present).length;
-      toast.success(`${present}/${total} invités présents`, {
-        duration: 2000,
-      });
-    }
-  }, [guests.length]);
+    if (loading || didInitToast.current) return;
+    didInitToast.current = true;
+    const total = guests.length;
+    const present = guests.filter((g) => g.is_present).length;
+    toast.success(`${present}/${total} invités présents`, {
+      duration: 2000,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   // ---- Statistiques calculées avec useMemo ----
 
@@ -417,15 +419,15 @@ export default function DashboardStatsPage({
     }
 
     return results;
-  }, [guests, vipGuests, tables]);
+  }, [guests, vipGuests, tables, guestCountByTable]);
 
   // URLs d'export
   const exportUrls = useMemo(
     () => ({
-      masterBook: `/api/event/${eventId}/export/master-book`,
-      tableSheets: `/api/event/${eventId}/export/table-sheets`,
-      cateringSummary: `/api/event/${eventId}/export/catering-summary`,
-      csv: `/api/event/${eventId}/export/csv`,
+      masterBook: `/api/reports/${eventId}/master-book`,
+      tableSheets: `/api/reports/${eventId}/table-sheets`,
+      cateringSummary: `/api/reports/${eventId}/catering-summary`,
+      csv: `/api/reports/${eventId}/csv`,
     }),
     [eventId]
   );

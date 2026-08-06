@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/card";
 import { toast } from "sonner";
 import { ArrowLeft, Plus, Pencil, Trash2, Archive, RotateCcw } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 type Event = Database["public"]["Tables"]["events"]["Row"];
@@ -35,11 +34,6 @@ const eventSchema = z.object({
 });
 
 type EventForm = z.infer<typeof eventSchema>;
-
-// Schéma de validation pour une zone
-const zoneSchema = z.object({
-  name: z.string().min(1, "Le nom est requis"),
-});
 
 // Variants d'animation pour les sections
 const sectionVariants = {
@@ -76,7 +70,7 @@ export default function EventSettingsPage({
   const prefersReducedMotion = useReducedMotion();
   const router = useRouter();
   const [eventId, setEventId] = useState<string>("");
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
   const [event, setEvent] = useState<Event | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
@@ -85,29 +79,50 @@ export default function EventSettingsPage({
   const [zoneName, setZoneName] = useState("");
 
   // Charge les données de l'événement et des zones
-  const loadData = useCallback(async () => {
-    const id = await params.then((p) => p.eventId);
-    setEventId(id);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const id = await params.then((p) => p.eventId);
+      if (cancelled) return;
+      setEventId(id);
 
+      const { data: ev } = await supabase
+        .from("events")
+        .select("*")
+        .eq("id", id)
+        .single();
+      if (!cancelled && ev) setEvent(ev);
+
+      const { data: zns } = await supabase
+        .from("zones")
+        .select("*")
+        .eq("event_id", id)
+        .order("name");
+      if (!cancelled) {
+        setZones(zns ?? []);
+        setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [params, supabase]);
+
+  const refreshData = async () => {
+    if (!eventId) return;
     const { data: ev } = await supabase
       .from("events")
       .select("*")
-      .eq("id", id)
+      .eq("id", eventId)
       .single();
     if (ev) setEvent(ev);
-
     const { data: zns } = await supabase
       .from("zones")
       .select("*")
-      .eq("event_id", id)
+      .eq("event_id", eventId)
       .order("name");
     setZones(zns ?? []);
-    setLoading(false);
-  }, [params, supabase]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  };
 
   const {
     register,
@@ -167,7 +182,7 @@ export default function EventSettingsPage({
         return;
       }
       toast.success(event?.is_archived ? "Événement restauré" : "Événement archivé");
-      loadData();
+      refreshData();
       router.refresh();
     } catch {
       toast.error("Erreur lors de l'archivage");
@@ -199,7 +214,7 @@ export default function EventSettingsPage({
       }
       setZoneName("");
       setEditingZone(null);
-      loadData();
+      refreshData();
     } catch {
       toast.error("Erreur lors de la sauvegarde de la zone");
     }
@@ -223,7 +238,7 @@ export default function EventSettingsPage({
         toast.error(error.message);
         return;
       }
-      loadData();
+      refreshData();
     } catch {
       toast.error("Erreur lors de la suppression");
     }

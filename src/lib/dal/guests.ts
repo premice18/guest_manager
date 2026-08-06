@@ -1,7 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import type { Database } from "@/types/database.types";
-
-type Guest = Database["public"]["Tables"]["guests"]["Row"];
 
 export async function getGuestsByEvent(
   eventId: string,
