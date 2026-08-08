@@ -437,7 +437,8 @@ export default function PlacementPage({
       const { error } = await supabase
         .from("guests")
         .update({ table_id: tableId })
-        .eq("group_id", groupId);
+        .eq("group_id", groupId)
+        .eq("event_id", eventId);
       if (error) {
         setAllGuests(prevGuests);
         refreshData();

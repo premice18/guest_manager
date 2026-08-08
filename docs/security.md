@@ -66,13 +66,19 @@ END IF;
 
 ## 5. Règles d'intégrité imposées en base
 
-Ne jamais faire confiance au client pour la capacité ou le verrouillage. Le trigger
-`zz_guests_enforce_capacity` (migration `20260806`) :
+Ne jamais faire confiance au client pour la capacité ou le verrouillage. Les triggers
+(`zz_guests_enforce_capacity` row-level + `zz_guests_validate_statement` statement-level,
+migrations `20260806` / `20260809`) :
 
-- verrouille la ligne `tables` cible (`FOR UPDATE`) pour sérialiser les écritures
+- verrouillent la ligne `tables` cible (`FOR UPDATE`) pour sérialiser les écritures
   concurrentes ;
-- refuse (ERRCODE `23514`) si la table est verrouillée ;
-- refuse si l'ajout / changement de table **dépasse la capacité**.
+- refusent (ERRCODE `23514`) si la table est verrouillée ;
+- refusent si l'ajout / changement de table **dépasse la capacité** ;
+- **respectent les mises à jour sans changement de table** (édition de nom, notes…)
+  même sur une table pleine ou verrouillée ;
+- re-vérifient l'état **final** de toutes les tables touchées après une instruction
+  groupée (déplacement d'un groupe entier, insertions par lots), ce qui couvre
+  l'angle mort des triggers row-level sur une même instruction.
 
 Les contrôles côté UI ne sont qu'un confort ; la base est l'arbitre final.
 
@@ -88,12 +94,14 @@ Définis dans `next.config.ts` :
 
 - `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`
 - `Strict-Transport-Security`, `Referrer-Policy`, `Permissions-Policy`
-- **Content-Security-Policy** : `default-src 'self'`, `script-src 'self'` + hash du
-  script inline du thème (`src/app/layout.tsx`), `connect-src` avec l'origine Supabase
-  et son WebSocket Realtime, `frame-ancestors 'none'`.
+- **Content-Security-Policy** : `default-src 'self'`, `script-src 'self' 'unsafe-inline'`
+  (nécessaire : Next.js émet des scripts inline RSC `self.__next_f.push` dont le hash
+  varie à chaque build ; les pages restent en rendu statique), `connect-src` avec
+  l'origine Supabase et son WebSocket Realtime, `frame-ancestors 'none'`, `base-uri 'self'`,
+  `form-action 'self'`.
 
-> Si le script inline de thème change, **recalculez son hash sha256** et mettez à jour
-> la CSP dans `next.config.ts`.
+> `unsafe-inline` sur `script-src` est l'approche documentée par Next.js sans nonce ;
+> il n'autorise pas les scripts externes non whitelistés (`'self'` uniquement).
 
 ## 8. Vie privée (PII)
 
