@@ -280,7 +280,12 @@ useEffect(() => {
   };
 
   // Réorganise l'ordre d'affichage (monter / descendre)
-  const moveTable = async (index: number, direction: -1 | 1) => {
+  const moveTable = async (id: string, direction: -1 | 1) => {
+    // Recherche l'indice réel de la table dans la liste TRIÉE complète
+    // (l'indice de la carte filtrée ne peut pas être utilisé : il serait
+    // incohérent dès qu'un filtre de recherche/zone est actif).
+    const index = tables.findIndex((t) => t.id === id);
+    if (index < 0) return;
     const newIndex = index + direction;
     if (newIndex < 0 || newIndex >= tables.length) return;
 
@@ -417,7 +422,7 @@ useEffect(() => {
                             size="icon"
                             className="size-7"
                             aria-label="Déplacer vers le haut"
-                            onClick={() => moveTable(index, -1)}
+                            onClick={() => moveTable(table.id, -1)}
                             disabled={index === 0}
                           >
                             <GripVertical className="size-4 rotate-90" />
@@ -429,8 +434,8 @@ useEffect(() => {
                             size="icon"
                             className="size-7"
                             aria-label="Déplacer vers le bas"
-                            onClick={() => moveTable(index, 1)}
-                            disabled={index === tables.length - 1}
+                            onClick={() => moveTable(table.id, 1)}
+                            disabled={index === filteredTables.length - 1}
                           >
                             <GripVertical className="size-4 -rotate-90" />
                           </Button>
