@@ -19,16 +19,21 @@ const nextConfig: NextConfig = {
             key: "Strict-Transport-Security",
             value: "max-age=63072000; includeSubDomains; preload",
           },
-          // En production uniquement. Autorise le script inline du thème (voir
-          // src/app/layout.tsx) via son hash, et les flux Supabase+Realtime.
-          // Recalculez le hash si le script de thème change.
+          // En production uniquement. `unsafe-inline` est nécessaire sur script-src :
+          // Next.js émet toujours des scripts inline pour l'hydratation (payload RSC
+          // `self.__next_f.push`) dont le contenu varie à chaque build, impossible à
+          // hacher proprement. La doc Next.js recommande cette approche quand les pages
+          // restent rendues STATIQUEMENT (l'alternative nonce impose le rendu dynamique
+          // de toutes les pages). Le reste du script-src reste restreint à 'self',
+          // et les autres directives (images, connect-src Supabase, frame, base-uri...)
+          // restent strictes.
           ...(isProd
             ? [
                 {
                   key: "Content-Security-Policy",
                   value: [
                     "default-src 'self'",
-                    "script-src 'self' 'sha256-3ZGJDkIJoAUO/YtBCGW4Lo/2NOqWTJKS1AotDqhih4A='",
+                    "script-src 'self' 'unsafe-inline'",
                     "style-src 'self' 'unsafe-inline'",
                     "img-src 'self' data: blob:",
                     "font-src 'self' data:",

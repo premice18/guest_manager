@@ -54,8 +54,9 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            // ⚠️ Ce contenu est raccourci par le hash CSP ci-dessous (next.config.ts).
-            // Toute modification exige de recalculer le hash sha256.
+            // ⚠️ Exécuté avant toute hydratation pour éviter le "flash" de thème.
+            // La CSP (next.config.ts) autorise les scripts inline en production
+            // (requis par les scripts RSC de Next.js).
             __html: `(function(){try{var t=localStorage.getItem('theme');if(!t){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}if(t==='dark'){document.documentElement.classList.add('dark');}}catch(e){}})();`,
           }}
         />

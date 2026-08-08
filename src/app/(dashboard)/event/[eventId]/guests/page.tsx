@@ -54,6 +54,49 @@ const AGE_LABELS: Record<string, string> = {
   baby: "Bébé",
 };
 
+// Analyse uneparse CSV ligne respectant les guillemets (permise des virgules
+// ou points-virgules entre guillemets, guillemets doublés échappés).
+function parseCsvLine(line: string, delimiter: string): string[] {
+  const cells: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"' && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else if (ch === '"') {
+        inQuotes = false;
+      } else {
+        current += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === delimiter) {
+      cells.push(current.trim());
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+// Normalise une valeur de tranche d'âge française vers l'enum de la base
+function normalizeAge(value: string): "adult" | "child" | "baby" {
+  const v = value.trim().toLowerCase();
+  if (["child", "enfant", "kids", "enfants"].includes(v)) return "child";
+  if (["baby", "bébé", "bebe", "nourrisson"].includes(v)) return "baby";
+  return "adult";
+}
+
+// Interprète une valeur booléenne (accessibilité) : Oui/Non/1/0/true/false...
+function toBool(value: string): boolean {
+  return ["oui", "yes", "true", "vrai", "1", "x"].includes(value.trim().toLowerCase());
+}
+
 // Variants d'animation pour les rangées du tableau
 const tableContainerVariants = {
   hidden: { opacity: 0 },
@@ -103,9 +146,17 @@ const [filterPresent, setFilterPresent] = useState<string>("all");
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 50;
 
+  // Droits d'écriture : le propriétaire et les admins peuvent tout faire,
+  // les hôtes sont en lecture seule (la présence se gère depuis la réception).
+  const [canManage, setCanManage] = useState(false);
+
   // État du modal invité
   const [guestModalOpen, setGuestModalOpen] = useState(false);
   const [editingGuest, setEditingGuest] = useState<Guest | null>(null);
+
+  // Confirmation de suppression
+  const [deleteTarget, setDeleteTarget] = useState<Guest | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [formFirstName, setFormFirstName] = useState("");
   const [formLastName, setFormLastName] = useState("");
   const [formCategory, setFormCategory] = useState("");
@@ -156,6 +207,25 @@ useEffect(() => {
         .order("first_name");
       const rawGuests = (gsts ?? []) as Guest[];
 
+      // Détermine le rôle courant (owner / admin => gestion complète, host => lecture seule)
+      let role: string | null = null;
+      const { data: currentUser } = await supabase.auth.getUser();
+      if (currentUser?.user?.id) {
+        const { data: staffRow } = await supabase
+          .from("event_staff")
+          .select("role")
+          .eq("event_id", id)
+          .eq("user_id", currentUser.user.id)
+          .maybeSingle();
+        role = staffRow?.role ?? null;
+      }
+      const { data: evOwner } = await supabase
+        .from("events")
+        .select("owner_id")
+        .eq("id", id)
+        .single();
+      const isOwner = !!evOwner && evOwner.owner_id === currentUser?.user?.id;
+
       if (!cancelled) {
         setTables(rawTables);
         // Associe le nom de la table pour chaque invité
@@ -166,6 +236,7 @@ useEffect(() => {
             tables: g.table_id ? { name: tableMap.get(g.table_id) ?? "?" } : null,
           }))
         );
+        setCanManage(isOwner || role === "admin");
         setLoading(false);
       }
     })();
@@ -311,6 +382,7 @@ useEffect(() => {
             .from("guests")
             .update({ table_id: payload.table_id })
             .eq("group_id", payload.group_id)
+            .eq("event_id", eventId)
             .neq("id", editingGuest.id);
           if (groupError) toast.error("Erreur lors de l'application au groupe");
         }
@@ -332,18 +404,33 @@ useEffect(() => {
     }
   };
 
-  // Supprime un invité
-  const deleteGuest = async (guest: Guest) => {
+  // Supprime un invité (appelé depuis le modal de confirmation)
+  const confirmDeleteGuest = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      const { error } = await supabase.from("guests").delete().eq("id", guest.id);
+      const { error } = await supabase.from("guests").delete().eq("id", deleteTarget.id);
       if (error) {
         toast.error(error.message);
+        setDeleteTarget(null);
         return;
       }
       toast.success("Invité supprimé");
+      setDeleteTarget(null);
+      const { count } = await supabase
+        .from("guests")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", eventId);
+      // Si la page courante devient vide, on remonte d'une page
+      if (count !== null && count <= page * PAGE_SIZE) {
+        setPage(Math.max(0, page - 1));
+      }
       loadData();
     } catch {
       toast.error("Erreur lors de la suppression");
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -430,8 +517,11 @@ if (filterPresent === "absent" && g.is_present) return false;
     return true;
   });
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const pageGuests = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  // Page bornée pour éviter l'état vide quand le résultat se réduit
+  // (suppression du dernier élément de la page, filtre resserré...)
+  const safePage = Math.min(page, totalPages - 1);
+  const pageGuests = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
   // Export CSV
   const exportCSV = () => {
@@ -462,9 +552,14 @@ if (filterPresent === "absent" && g.is_present) return false;
     const file = e.target.files?.[0];
     if (!file) return;
     const text = await file.text();
-    const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
-    const headers = lines[0].split(",").map((h) => h.replace(/^"|"$/g, ""));
-    const data = lines.slice(1).map((l) => l.split(",").map((c) => c.replace(/^"|"$/g, "")));
+    // Définit un séparateur (virgule ou point-virgule) selon le plus présent
+    const lines = text.split(/\r?\n/).map((l) => l.replace(/^\uFEFF/, "")).filter(Boolean);
+    const headerLine = lines[0] ?? "";
+    const commaCount = (headerLine.match(/,/g) ?? []).length;
+    const semiCount = (headerLine.match(/;/g) ?? []).length;
+    const delimiter = semiCount > commaCount ? ";" : ",";
+    const headers = parseCsvLine(headerLine, delimiter);
+    const data = lines.slice(1).map((l) => parseCsvLine(l, delimiter));
     setCsvHeaders(headers);
     setCsvData(data);
     // Mapping par défaut
@@ -478,6 +573,7 @@ if (filterPresent === "absent" && g.is_present) return false;
       else if (hl.includes("groupe") || hl.includes("group")) guess[h] = "group_name";
       else if (hl.includes("table")) guess[h] = "table_id";
       else if (hl.includes("régime") || hl.includes("aliment") || hl.includes("diet")) guess[h] = "dietary_notes";
+      else if (hl.includes("accessib")) guess[h] = "needs_accessibility";
     }
     setColumnMapping(guess);
     setImportModalOpen(true);
@@ -498,7 +594,10 @@ const executeImport = async () => {
 
     const rowsToInsert: (Database["public"]["Tables"]["guests"]["Insert"] & { event_id: string })[] = [];
 
-for (const row of csvData) {
+    // Correspondance nom de table (colonne CSV) -> id de table
+    const tableIdByName = new Map(tables.map((t) => [t.name.toLowerCase(), t.id]));
+
+    for (const row of csvData) {
       try {
         const get = (field: string) => {
           const colIndex = reverseMap[field];
@@ -514,14 +613,17 @@ for (const row of csvData) {
           continue;
         }
 
+        const tableName = get("table_id");
         rowsToInsert.push({
           event_id: eventId,
           first_name: firstName,
           last_name: lastName,
           category: get("category") || null,
-          age_type: (get("age_type") as "adult" | "child" | "baby") || "adult",
+          age_type: get("age_type") ? normalizeAge(get("age_type")) : "adult",
+          table_id: tableName ? tableIdByName.get(tableName.toLowerCase()) ?? null : null,
           group_name: get("group_name") || null,
           dietary_notes: get("dietary_notes") || null,
+          needs_accessibility: get("needs_accessibility") ? toBool(get("needs_accessibility")) : false,
           notes: get("notes") || null,
         });
       } catch {
@@ -534,13 +636,23 @@ for (const row of csvData) {
       try {
         const { error } = await supabase.from("guests").insert(rowsToInsert);
         if (error) {
-          toast.error(error.message);
-          errors += rowsToInsert.length;
-          rowsToInsert.length = 0;
+          // Une ligne invalide (enum d'âge, capacité DB...) ne doit pas faire
+          // échouer l'ensemble : on retente ligne par ligne puis on compte les
+          // erreurs unitaires. Le trigger de capacité rejette également ici.
+          let ok = 0;
+          let failed = 0;
+          for (const row of rowsToInsert) {
+            const { error: rowError } = await supabase.from("guests").insert(row);
+            if (rowError) failed++;
+            else ok++;
+          }
+          success = ok;
+          errors += failed;
         } else {
           success = rowsToInsert.length;
         }
       } catch {
+        // Erreur réseau inattendue : chaque ligne du lot est comptée comme un échec
         errors += rowsToInsert.length;
       }
     }
@@ -586,35 +698,41 @@ for (const row of csvData) {
             className="hidden"
             onChange={handleFileSelect}
           />
-          <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
-            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-              <Upload className="mr-1.5 size-4" />
-              Importer CSV
-            </Button>
-          </motion.div>
+          {canManage && (
+            <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
+              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                <Upload className="mr-1.5 size-4" />
+                Importer CSV
+              </Button>
+            </motion.div>
+          )}
           <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
             <Button variant="outline" size="sm" onClick={exportCSV}>
               <Download className="mr-1.5 size-4" />
               Exporter CSV
             </Button>
           </motion.div>
-          <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setBulkModalOpen(true)}
-              className="gap-1.5 text-gold border-gold/30 hover:bg-gold/5"
-            >
-              <UserPlus className="size-4" />
-              Ajout rapide
-            </Button>
-          </motion.div>
-          <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
-            <Button size="sm" onClick={() => openGuestModal()}>
-              <Plus className="mr-1.5 size-4" />
-              Ajouter un invité
-            </Button>
-          </motion.div>
+          {canManage && (
+            <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setBulkModalOpen(true)}
+                className="gap-1.5 text-gold border-gold/30 hover:bg-gold/5"
+              >
+                <UserPlus className="size-4" />
+                Ajout rapide
+              </Button>
+            </motion.div>
+          )}
+          {canManage && (
+            <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
+              <Button size="sm" onClick={() => openGuestModal()}>
+                <Plus className="mr-1.5 size-4" />
+                Ajouter un invité
+              </Button>
+            </motion.div>
+          )}
         </div>
       </motion.div>
 
@@ -673,7 +791,7 @@ for (const row of csvData) {
 
       {/* Actions de groupe */}
       <AnimatePresence>
-        {selectedGuestIds.size > 0 && (
+        {canManage && selectedGuestIds.size > 0 && (
           <motion.div
             initial={prefersReducedMotion ? false : { opacity: 0, y: -12, height: 0 }}
             animate={prefersReducedMotion ? {} : { opacity: 1, y: 0, height: "auto" }}
@@ -690,18 +808,20 @@ for (const row of csvData) {
               >
                 {selectedGuestIds.size} sélectionné(s)
               </motion.span>
-              <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setNewGroupName("");
-                    setGroupModalOpen(true);
-                  }}
-                >
-                  Créer un groupe
-                </Button>
-              </motion.div>
+              {canManage && (
+                <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setNewGroupName("");
+                      setGroupModalOpen(true);
+                    }}
+                  >
+                    Créer un groupe
+                  </Button>
+                </motion.div>
+              )}
               <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                 <Button
                   size="sm"
@@ -820,44 +940,46 @@ for (const row of csvData) {
                     )}
                   </td>
                   <td className="px-3 py-2.5 text-right">
-                    <div className="flex justify-end gap-0.5">
-                      <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.1 }} whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7"
-                          aria-label="Modifier"
-                          onClick={() => openGuestModal(guest)}
-                        >
-                          <Pencil className="size-3.5" />
-                        </Button>
-                      </motion.div>
-                      {guest.group_id && (
+                    {canManage && (
+                      <div className="flex justify-end gap-0.5">
                         <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.1 }} whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}>
                           <Button
                             variant="ghost"
                             size="icon"
                             className="size-7"
-                            aria-label="Retirer du groupe"
-                            onClick={() => removeFromGroup(guest)}
-                            title="Retirer du groupe"
+                            aria-label="Modifier"
+                            onClick={() => openGuestModal(guest)}
                           >
-                            <Users className="size-3.5" />
+                            <Pencil className="size-3.5" />
                           </Button>
                         </motion.div>
-                      )}
-                      <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.1 }} whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7 text-destructive"
-                          aria-label="Supprimer"
-                          onClick={() => deleteGuest(guest)}
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </motion.div>
-                    </div>
+                        {guest.group_id && (
+                          <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.1 }} whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7"
+                              aria-label="Retirer du groupe"
+                              onClick={() => removeFromGroup(guest)}
+                              title="Retirer du groupe"
+                            >
+                              <Users className="size-3.5" />
+                            </Button>
+                          </motion.div>
+                        )}
+                        <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.1 }} whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7 text-destructive"
+                            aria-label="Supprimer"
+                            onClick={() => setDeleteTarget(guest)}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </motion.div>
+                      </div>
+                    )}
                   </td>
                 </motion.tr>
               ))}
@@ -873,7 +995,7 @@ for (const row of csvData) {
               className="flex items-center justify-between border-t border-border px-4 py-3"
             >
               <p className="text-sm text-muted-foreground">
-                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} sur {filtered.length}
+                {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} sur {filtered.length}
               </p>
               <div className="flex gap-1">
                 <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
@@ -1019,7 +1141,7 @@ initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, y: 10 }}
                   Besoin d&rsquo;accessibilité
                 </label>
               </div>
-              {editingGuest && formTableId !== "none" && (
+              {editingGuest && canManage && formTableId !== "none" && (
                 <div className="sm:col-span-2">
                   <label className="flex items-center gap-2 text-sm">
                     <input
@@ -1136,6 +1258,7 @@ initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, y: 10 }}
                       <SelectItem value="category">Catégorie</SelectItem>
                       <SelectItem value="age_type">Tranche d&apos;âge</SelectItem>
                       <SelectItem value="group_name">Groupe</SelectItem>
+                      <SelectItem value="table_id">Table</SelectItem>
                       <SelectItem value="dietary_notes">Notes alimentaires</SelectItem>
                       <SelectItem value="needs_accessibility">Accessibilité</SelectItem>
                       <SelectItem value="notes">Notes</SelectItem>
@@ -1164,17 +1287,58 @@ initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, y: 10 }}
       </Dialog>
 
       {/* FAB mobile pour ajouter un invité */}
-      <div className="fixed bottom-6 right-6 z-50 sm:hidden">
-        <motion.button
-          onClick={() => openGuestModal()}
-          whileHover={prefersReducedMotion ? {} : { scale: 1.1 }}
-          whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}
-          className="flex size-14 items-center justify-center rounded-full bg-gold text-deep-black shadow-lg shadow-gold/30"
-          aria-label="Ajouter un invité"
-        >
-          <Plus className="size-7" />
-        </motion.button>
-      </div>
+      {canManage && (
+        <div className="fixed bottom-6 right-6 z-50 sm:hidden">
+          <motion.button
+            onClick={() => openGuestModal()}
+            whileHover={prefersReducedMotion ? {} : { scale: 1.1 }}
+            whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}
+            className="flex size-14 items-center justify-center rounded-full bg-gold text-deep-black shadow-lg shadow-gold/30"
+            aria-label="Ajouter un invité"
+          >
+            <Plus className="size-7" />
+          </motion.button>
+        </div>
+      )}
+
+      {/* Modal confirmation de suppression */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <DialogContent>
+          <motion.div
+            initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, y: 10 }}
+            animate={prefersReducedMotion ? {} : { opacity: 1, scale: 1, y: 0 }}
+            transition={{ type: "spring" as const, stiffness: 260, damping: 24 }}
+          >
+            <DialogHeader>
+              <DialogTitle>Supprimer cet invité ?</DialogTitle>
+              <DialogDescription>
+                {deleteTarget ? (
+                  <>
+                    « {deleteTarget.first_name} {deleteTarget.last_name} » sera
+                    définitivement retiré de la liste et de sa table.
+                  </>
+                ) : null}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
+                <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+                  Annuler
+                </Button>
+              </motion.div>
+              <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
+                <Button
+                  onClick={confirmDeleteGuest}
+                  disabled={deleting}
+                  className="bg-destructive text-white hover:bg-destructive/90"
+                >
+                  {deleting ? "Suppression..." : "Supprimer"}
+                </Button>
+              </motion.div>
+            </DialogFooter>
+          </motion.div>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
