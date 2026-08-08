@@ -197,7 +197,8 @@ export default function EventSettingsPage({
         const { error } = await supabase
           .from("zones")
           .update({ name: zoneName.trim() })
-          .eq("id", editingZone.id);
+          .eq("id", editingZone.id)
+          .eq("event_id", eventId);
         if (error) {
           toast.error(error.message);
           return;
@@ -233,7 +234,11 @@ export default function EventSettingsPage({
         return;
       }
 
-      const { error } = await supabase.from("zones").delete().eq("id", zoneId);
+      const { error } = await supabase
+        .from("zones")
+        .delete()
+        .eq("id", zoneId)
+        .eq("event_id", eventId);
       if (error) {
         toast.error(error.message);
         return;

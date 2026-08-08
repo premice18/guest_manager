@@ -83,13 +83,15 @@ export default async function DashboardPage() {
   }
   if (!user) redirect("/login");
 
-  // Récupère les événements non archivés de l'utilisateur
+  // Récupère les événements non archivés de l'utilisateur.
+  // NB (fix audit) : ne PAS filtrer par owner_id — la RLS events_select_policy
+  // autorise déjà owner ET staff (hosts/admins). Un filtre owner_id = user.id
+  // rendait les événements partagés invisibles pour les staff non-propriétaires.
   let events: { id: string; name: string; event_date: string; location: string | null; is_archived: boolean }[] = [];
   try {
     const { data } = await supabase
       .from("events")
       .select("id, name, event_date, location, is_archived")
-      .eq("owner_id", user.id)
       .eq("is_archived", false)
       .order("event_date", { ascending: true });
     events = data ?? [];

@@ -18,12 +18,21 @@ export async function GET(
 
     const supabase = await createClient();
 
-    const { data: guests } = await supabase
+    const { data: guests, error } = await supabase
       .from("guests")
       .select("id, first_name, last_name, category, age_type, dietary_notes, needs_accessibility, is_present, checked_in_at, group_id, group_name, notes, table_id, tables(name)")
       .eq("event_id", parsedId.data)
       .order("last_name", { ascending: true })
       .order("first_name", { ascending: true });
+
+    // Une erreur RLS/réseau ne doit JAMAIS produire un CSV vide (HTTP 200) :
+    // on propage une erreur explicite côté client.
+    if (error) {
+      return NextResponse.json(
+        { error: "Impossible de charger les invités pour l'export" },
+        { status: 500 }
+      );
+    }
 
     // Sécurise une cellule CSV : échappe les guillemets ET neutralise
     // l'injection de formule Excel (cellules débutant par = + - @ etc.)

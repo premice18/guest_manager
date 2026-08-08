@@ -43,7 +43,8 @@ type ResetForm = z.infer<typeof resetSchema>;
 export default function ResetPasswordPage() {
   const prefersReducedMotion = useReducedMotion();
   const router = useRouter();
-  const supabase = createClient();
+  // Client Supabase créé une seule fois (état paresseux) — fix audit.
+  const [supabase] = useState(() => createClient());
   const [checking, setChecking] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);

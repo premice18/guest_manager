@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -32,7 +33,8 @@ type ForgotForm = z.infer<typeof forgotSchema>;
 export default function ForgotPasswordPage() {
   const prefersReducedMotion = useReducedMotion();
   const router = useRouter();
-  const supabase = createClient();
+  // Client Supabase créé une seule fois (état paresseux) — fix audit.
+  const [supabase] = useState(() => createClient());
 
   const {
     register,

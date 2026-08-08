@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import { useReceptionStore } from "@/lib/store/reception-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -50,6 +51,45 @@ function stringToColor(str: string) {
   }
   const hue = hash % 360;
   return `hsl(${hue}, 55%, 75%)`;
+}
+
+// Extensions autorisées pour l'avatar, en lien avec la whitelist MIME du
+// bucket 'avatars' (image/png, image/jpeg, image/webp).
+const AVATAR_EXTENSIONS = ["jpg", "png", "webp"] as const;
+type AvatarExt = (typeof AVATAR_EXTENSIONS)[number];
+
+// Détermine l'extension à partir des OCTETS réels du fichier (signatures
+// magiques), jamais depuis le nom du fichier fourni par le client (qui peut
+// être trompeur / contenir des caractères de chemin). Retourne null si le
+// fichier n'est pas une image connue.
+async function detectAvatarExtension(file: File): Promise<AvatarExt | null> {
+  const size = Math.min(16, file.size);
+  if (size === 0) return null;
+  const buf = new Uint8Array(await file.slice(0, size).arrayBuffer());
+
+  const isPng =
+    buf.length >= 8 &&
+    buf[0] === 0x89 &&
+    buf[1] === 0x50 &&
+    buf[2] === 0x4e &&
+    buf[3] === 0x47;
+  const isJpeg =
+    buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+  const isWebp =
+    buf.length >= 12 &&
+    buf[0] === 0x52 && // 'R'
+    buf[1] === 0x49 && // 'I'
+    buf[2] === 0x46 && // 'F'
+    buf[3] === 0x46 && // 'F'
+    buf[8] === 0x57 && // 'W'
+    buf[9] === 0x45 && // 'E'
+    buf[10] === 0x42 && // 'B'
+    buf[11] === 0x50; // 'P'
+
+  if (isJpeg) return "jpg";
+  if (isPng) return "png";
+  if (isWebp) return "webp";
+  return null;
 }
 
 // Évalue la force d'un mot de passe (0 à 4 critères)
@@ -97,7 +137,9 @@ function PasswordStrength({ password }: { password: string }) {
 // Page de profil administrateur
 export default function ProfilePage() {
   const router = useRouter();
-  const supabase = createClient();
+  // Client Supabase créé une seule fois (fix audit) : le créer à chaque
+  // render réarmait les abonnements et les requêtes de la page.
+  const supabase = useMemo(() => createClient(), []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [user, setUser] = useState<User | null>(null);
@@ -203,15 +245,29 @@ export default function ProfilePage() {
     if (!avatarFile || !user) return;
     setUploading(true);
     try {
-      const ext = avatarFile.name.split(".").pop();
+      // Détecte le vrai type image (signatures octets). Le nom de fichier du
+      // client n'est JAMAIS utilisé (il peut contenir une extension piégée
+      // ou des caractères de chemin — fix audit).
+      const ext = await detectAvatarExtension(avatarFile);
+      if (!ext) {
+        toast.error("Format non supporté (JPG, PNG, WebP uniquement)");
+        return;
+      }
+
       const filePath = `${user.id}/profile.${ext}`;
 
-      // Supprime l'ancien avatar s'il existe
-      await supabase.storage.from("avatars").remove([`${user.id}/profile.jpg`, `${user.id}/profile.png`, `${user.id}/profile.webp`]);
+      // Supprime l'ancien avatar s'il existe, quel que soit son extension
+      await supabase.storage
+        .from("avatars")
+        .remove(AVATAR_EXTENSIONS.map((e) => `${user.id}/profile.${e}`));
 
       const { error } = await supabase.storage
         .from("avatars")
-        .upload(filePath, avatarFile, { upsert: true });
+        .upload(filePath, avatarFile, {
+          upsert: true,
+          contentType: `image/${ext === "jpg" ? "jpeg" : ext}`,
+          cacheControl: "3600",
+        });
 
       if (error) {
         toast.error(error.message);
@@ -302,6 +358,8 @@ export default function ProfilePage() {
         toast.error(error.message);
         return;
       }
+      // Purge le cache de réception persistant avant de quitter (fix audit)
+      useReceptionStore.getState().clearAll();
       toast.success("Déconnecté de tous les appareils");
       setLogoutAllOpen(false);
       router.push("/login");

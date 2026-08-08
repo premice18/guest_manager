@@ -39,8 +39,9 @@ interface ReceptionState {
 
   pendingActions: PendingAction[];
   addPendingAction: (action: PendingAction) => void;
-  removePendingAction: (guestId: string) => void;
+  removePendingAction: (actionId: string) => void;
   clearPendingActions: () => void;
+  clearAll: () => void;
 
   isOnline: boolean;
   setOnline: (online: boolean) => void;
@@ -112,14 +113,28 @@ export const useReceptionStore = create<ReceptionState>()(
         set({ pendingActions: [...get().pendingActions, action] });
       },
 
-      // Supprime une action de la file (après synchronisation réussie)
-      removePendingAction: (guestId) => {
+      // Supprime une action de la file (après synchronisation réussie).
+      // Filtrée par action.id (et non guestId) : si le même invité a plusieurs
+      // actions en attente (ex. check-in puis check-out hors-ligne), la
+      // synchro d'une seule action ne doit pas écraser les autres (fix audit).
+      removePendingAction: (actionId) => {
         set({
-          pendingActions: get().pendingActions.filter((a) => a.guestId !== guestId),
+          pendingActions: get().pendingActions.filter((a) => a.id !== actionId),
         });
       },
 
       clearPendingActions: () => set({ pendingActions: [] }),
+
+      // Purge complète du store (déconnexion). Vide TOUT le cache en mémoire
+      // et le snapshot persistant, afin qu'un autre compte connecté sur le
+      // même poste ne récupère pas les invités/actions du précédent
+      // (fix audit : données inter-comptes + fuite des événements en mémoire).
+      clearAll: () =>
+        set({
+          events: {},
+          pendingActions: [],
+          isOnline: false,
+        }),
 
       setOnline: (online) => set({ isOnline: online }),
     }),
