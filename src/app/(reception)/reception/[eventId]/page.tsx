@@ -108,7 +108,7 @@ export default function ReceptionPage({
   const prefersReducedMotion = useReducedMotion();
   const { eventId } = use(params);
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const [eventName, setEventName] = useState("");
@@ -303,7 +303,8 @@ export default function ReceptionPage({
           is_present: newStatus,
           checked_in_at: newStatus ? timestamp : null,
         })
-        .eq("id", guest.id);
+        .eq("id", guest.id)
+        .eq("event_id", eventId);
 
       if (error) {
         updateGuest(eventId, guest.id, {
@@ -453,7 +454,7 @@ export default function ReceptionPage({
     const actions = [...pendingActions];
     let synced = 0;
 
-for (const action of actions) {
+    for (const action of actions) {
       try {
         // Walk-in créé hors-ligne : on insère l'invité
         if (action.walkin) {
@@ -464,7 +465,7 @@ for (const action of actions) {
             checked_in_at: action.timestamp,
           });
           if (!error) {
-            removePendingAction(action.guestId);
+            removePendingAction(action.id);
             synced++;
           }
           continue;
@@ -476,10 +477,11 @@ for (const action of actions) {
             is_present: action.type === "checkin",
             checked_in_at: action.type === "checkin" ? action.timestamp : null,
           })
-          .eq("id", action.guestId);
+          .eq("id", action.guestId)
+          .eq("event_id", eventId);
 
         if (!error) {
-          removePendingAction(action.guestId);
+          removePendingAction(action.id);
           synced++;
         }
       } catch {

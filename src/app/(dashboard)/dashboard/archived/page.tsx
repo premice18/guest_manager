@@ -20,13 +20,15 @@ export default async function ArchivedEventsPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // Récupère uniquement les événements archivés
+  // Récupère uniquement les événements archivés.
+  // NB (fix audit) : la RLS events_select_policy autorise owner ET staff, donc
+  // on ne filtre PAS par owner_id (rendait les événements partagés invisibles
+  // pour les hosts/admins non-propriétaires).
   let events: { id: string; name: string; event_date: string; location: string | null }[] = [];
   try {
     const { data } = await supabase
       .from("events")
       .select("id, name, event_date, location")
-      .eq("owner_id", user.id)
       .eq("is_archived", true)
       .order("event_date", { ascending: false });
     events = data ?? [];

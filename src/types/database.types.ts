@@ -249,7 +249,15 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      reorder_tables: {
+        Args: {
+          target_event_id: string;
+          table_ids: string[];
+        };
+        Returns: undefined;
+      };
+    };
     Enums: {
       age_category: "adult" | "child" | "baby";
       table_shape: "round" | "rectangular" | "imperial";

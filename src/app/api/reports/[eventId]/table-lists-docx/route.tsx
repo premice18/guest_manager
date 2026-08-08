@@ -54,6 +54,14 @@ export async function GET(
     const zones = zonesResult.data ?? [];
     const guests = guestsResult.data ?? [];
 
+    // Une erreur RLS/réseau ne doit jamais produire un DOCX vide (HTTP 200)
+    if (tablesResult.error || zonesResult.error || guestsResult.error) {
+      return NextResponse.json(
+        { error: "Impossible de charger les données pour l'export" },
+        { status: 500 }
+      );
+    }
+
     if (tables.length === 0) {
       return NextResponse.json(
         { error: "Aucune table disponible pour cet événement." },

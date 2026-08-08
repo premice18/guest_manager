@@ -78,7 +78,8 @@ export default function BulkAddModal({
   onSuccess,
 }: BulkAddModalProps) {
   const prefersReducedMotion = useReducedMotion();
-  const supabase = createClient();
+  // Client Supabase créé une seule fois (état paresseux) — fix audit.
+  const [supabase] = useState(() => createClient());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // État des lignes de saisie

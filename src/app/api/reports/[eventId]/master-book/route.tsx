@@ -20,12 +20,20 @@ export async function GET(
 
     const supabase = await createClient();
 
-    const { data: guests } = await supabase
+    const { data: guests, error } = await supabase
       .from("guests")
       .select("first_name, last_name, group_id, table_id, tables(name)")
       .eq("event_id", parsedId.data)
       .order("last_name", { ascending: true })
       .order("first_name", { ascending: true });
+
+    // Une erreur RLS/réseau ne doit jamais produire un PDF vide (HTTP 200)
+    if (error) {
+      return NextResponse.json(
+        { error: "Impossible de charger les invités pour l'export" },
+        { status: 500 }
+      );
+    }
 
     const guestsList = (guests ?? []).map((g) => ({
       first_name: g.first_name,

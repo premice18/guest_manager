@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -60,7 +61,8 @@ const itemVariants = {
 export default function CreateEventPage() {
   const prefersReducedMotion = useReducedMotion();
   const router = useRouter();
-  const supabase = createClient();
+  // Client Supabase créé une seule fois (état paresseux) — fix audit.
+  const [supabase] = useState(() => createClient());
 
   const {
     register,

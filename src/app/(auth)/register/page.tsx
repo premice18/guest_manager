@@ -77,7 +77,8 @@ type RegisterForm = z.infer<typeof registerSchema>;
 export default function RegisterPage() {
   const prefersReducedMotion = useReducedMotion();
   const router = useRouter();
-  const supabase = createClient();
+  // Client Supabase créé une seule fois (état paresseux) — fix audit.
+  const [supabase] = useState(() => createClient());
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 

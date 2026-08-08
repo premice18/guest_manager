@@ -4,34 +4,16 @@ import { createServerClient } from "@supabase/ssr";
 const authRoutes = ["/login", "/register", "/forgot-password", "/reset-password"];
 const protectedRoutes = ["/dashboard", "/event", "/reception"];
 
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT_WINDOW = 60_000;
-const RATE_LIMIT_MAX = 100;
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(ip);
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
-    return false;
-  }
-  entry.count++;
-  return entry.count > RATE_LIMIT_MAX;
-}
-
 export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const pathname = request.nextUrl.pathname.replace(/\/+$/, "") || "/";
 
-  const ip = request.headers.get("x-forwarded-for") ?? "unknown";
-  if (isRateLimited(ip)) {
-    return new NextResponse("Trop de requêtes", { status: 429 });
-  }
-
-  // Vérifie si la route courante nécessite une protection ou est une page d'auth
   const isProtected = protectedRoutes.some((route) => pathname.startsWith(route));
-  const isAuth = authRoutes.some((route) => pathname === route);
+  const isAuthRoute = authRoutes.some((route) => pathname === route);
 
-  // Crée un client Supabase avec les cookies de la requête
+  // Crée la réponse AVANT le client Supabase pour pouvoir y propager les
+  // cookies de session rafraîchis par Supabase (voir setAll ci-dessous).
+  const response = NextResponse.next({ request });
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -41,36 +23,54 @@ export async function proxy(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
+          // ⚠️ Critique (fix audit) : les cookies de session (access + refresh,
+          // réécrits lors de la rotation des tokens) doivent être positionnés
+          // SUR LA RÉPONSE. Les écrire sur la requête les perdait : le navigateur
+          // conservait d'anciens cookies révoqués → déconnexion silencieuse ~1h
+          // après l'expiration de l'access token.
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
           );
         },
       },
     }
   );
 
-  // Récupère l'utilisateur connecté
-  const { data: { user } } = await supabase.auth.getUser();
+  // Récupère l'utilisateur connecté. Une panne réseau/plateforme Supabase ne
+  // doit PAS être confondue avec un état déconnecté (message trompeur) : on
+  // laisse alors la requête continuer, la page se chargera côté serveur.
+  let user: { id: string } | null = null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch {
+    user = null;
+  }
 
   // Redirige vers la page de connexion si non authentifié sur une route protégée
   if (isProtected && !user) {
-    // Conserve la route d'origine pour y revenir après connexion
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("next", pathname);
+    // Conserve la route d'ORIGINE (path + query) pour y revenir après connexion
+    loginUrl.searchParams.set("next", pathname + (request.nextUrl.search || ""));
     return NextResponse.redirect(loginUrl);
   }
 
   // Redirige vers le dashboard si déjà connecté sur une page d'auth
-  if (isAuth && user) {
+  if (isAuthRoute && user) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  return NextResponse.next();
+  return response;
 }
 
-// Configuration du matcher : applique le proxy à toutes les routes sauf les assets statiques
+// Matcher : exécute le proxy sur les pages uniquement (pas les assets statiques,
+// pas les routes API qui gerent leur propre auth via requireEventAccess).
+// NB : le rate-limit d'authentification n'est PAS géré ici — les tentatives de
+// login passent directement par GoTrue (Supabase), jamais par le proxy. Un
+// rate-limit fiable doit se faire côté Supabase (email rate limits) ou via une
+// route API dédiée avec un store externe (à implémenter selon besoin).
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
