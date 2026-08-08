@@ -64,7 +64,9 @@ const staggerFast = {
 export default function LandingPage() {
   const prefersReducedMotion = useReducedMotion();
   const router = useRouter();
-  const supabase = createClient();
+  // Client Supabase créé une seule fois (état paresseux) — fix audit : le
+  // créer à chaque render ré-armait les appels auth dans l'effet ci-dessous.
+  const [supabase] = useState(() => createClient());
   const [isChecking, setIsChecking] = useState(true);
 
   // Vérification de session côté client (remplace le serveur asynchrone)

@@ -218,7 +218,8 @@ useEffect(() => {
         const { error } = await supabase
           .from("tables")
           .update(payload)
-          .eq("id", editingTable.id);
+          .eq("id", editingTable.id)
+          .eq("event_id", eventId);
         if (error) {
           toast.error(error.message);
           return;
@@ -251,7 +252,11 @@ useEffect(() => {
       return;
     }
     try {
-      const { error } = await supabase.from("tables").delete().eq("id", table.id);
+      const { error } = await supabase
+        .from("tables")
+        .delete()
+        .eq("id", table.id)
+        .eq("event_id", eventId);
       if (error) {
         toast.error(error.message);
         return;
@@ -268,7 +273,8 @@ useEffect(() => {
       const { error } = await supabase
         .from("tables")
         .update({ is_locked: !table.is_locked })
-        .eq("id", table.id);
+        .eq("id", table.id)
+        .eq("event_id", eventId);
       if (error) {
         toast.error(error.message);
         return;
@@ -300,19 +306,19 @@ useEffect(() => {
     setTables(updated);
 
     try {
-      const { error: errA } = await supabase
-        .from("tables")
-        .update({ sort_order: updated[index].sort_order })
-        .eq("id", updated[index].id);
-      const { error: errB } = await supabase
-        .from("tables")
-        .update({ sort_order: updated[newIndex].sort_order })
-        .eq("id", updated[newIndex].id);
+      // Réordonnancement atomique via un seul appel RPC (transaction en
+      // base) : deux UPDATE séparés n'étaient PAS atomiques et un tri
+      // intermédiaire pouvait adresser l'update aux mauvaises lignes.
+      const idOrder = updated.map((t) => t.id);
+      const { error } = await supabase.rpc("reorder_tables", {
+        target_event_id: eventId,
+        table_ids: idOrder,
+      });
 
-      if (errA || errB) {
-        // Rollback si l'une des deux écritures a échoué
+      if (error) {
+        // Rollback si l'écriture a échoué
         setTables(original);
-        toast.error(errA?.message ?? errB?.message ?? "Erreur lors du réordonnancement");
+        toast.error(error.message ?? "Erreur lors du réordonnancement");
       }
     } catch {
       setTables(original);

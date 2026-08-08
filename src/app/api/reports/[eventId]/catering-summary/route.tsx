@@ -32,6 +32,14 @@ export async function GET(
         .order("sort_order", { ascending: true }),
     ]);
 
+    // Une erreur RLS/réseau ne doit jamais produire un PDF vide (HTTP 200)
+    if (guestsResult.error || tablesResult.error) {
+      return NextResponse.json(
+        { error: "Impossible de charger les données pour l'export" },
+        { status: 500 }
+      );
+    }
+
     const guestsList = guestsResult.data ?? [];
     const tables = tablesResult.data ?? [];
 

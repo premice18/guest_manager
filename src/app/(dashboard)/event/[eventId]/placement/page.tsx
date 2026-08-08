@@ -10,6 +10,10 @@ import {
   useDraggable,
   useDroppable,
   closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
@@ -235,6 +239,13 @@ export default function PlacementPage({
   // État du drag
   const [activeGuest, setActiveGuest] = useState<Guest | null>(null);
 
+  // Capteurs de drag&drop : souris/tactile ET clavier (accessibilité —
+  // fix audit : le drag était inutilisable au clavier, en lecture d'écran).
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor)
+  );
+
   // Modal de confirmation pour le déplacement entre tables
   const [moveConfirmOpen, setMoveConfirmOpen] = useState(false);
   const [pendingMove, setPendingMove] = useState<{ guest: Guest; sourceTableId: string; targetTableId: string } | null>(null);
@@ -346,7 +357,8 @@ export default function PlacementPage({
       const { error } = await supabase
         .from("guests")
         .update({ table_id: tableId })
-        .eq("id", guestId);
+        .eq("id", guestId)
+        .eq("event_id", eventId);
       if (error) {
         // Rollback en cas d'erreur
         setAllGuests(prevGuests);
@@ -685,6 +697,7 @@ export default function PlacementPage({
       </div>
 
       <DndContext
+        sensors={sensors}
         collisionDetection={closestCenter}
         onDragStart={(event: DragStartEvent) => {
           const guest = event.active.data.current?.guest as Guest;

@@ -369,7 +369,8 @@ useEffect(() => {
         const { error } = await supabase
           .from("guests")
           .update(payload)
-          .eq("id", editingGuest.id);
+          .eq("id", editingGuest.id)
+          .eq("event_id", eventId);
         if (error) {
           toast.error(error.message);
           return;
@@ -409,7 +410,7 @@ useEffect(() => {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const { error } = await supabase.from("guests").delete().eq("id", deleteTarget.id);
+      const { error } = await supabase.from("guests").delete().eq("id", deleteTarget.id).eq("event_id", eventId);
       if (error) {
         toast.error(error.message);
         setDeleteTarget(null);
@@ -448,7 +449,8 @@ useEffect(() => {
           group_id: groupId,
           group_name: newGroupName.trim() || null,
         })
-        .in("id", Array.from(selectedGuestIds));
+        .in("id", Array.from(selectedGuestIds))
+        .eq("event_id", eventId);
 
       if (error) {
         toast.error(error.message);
@@ -470,7 +472,8 @@ useEffect(() => {
       const { error } = await supabase
         .from("guests")
         .update({ group_id: null, group_name: null })
-        .eq("id", guest.id);
+        .eq("id", guest.id)
+        .eq("event_id", eventId);
       if (error) {
         toast.error(error.message);
         return;
@@ -536,7 +539,17 @@ if (filterPresent === "absent" && g.is_present) return false;
       g.needs_accessibility ? "Oui" : "Non",
       g.is_present ? "Oui" : "Non", g.checked_in_at ?? "", g.notes ?? "",
     ]);
-    const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
+    // Échappe chaque cellule selon la norme CSV : doublant les guillemets
+    // internes et encadrant systématiquement par des guillemets. Évite
+    // l'injection de formule (=, +, -) via des valeurs commençant par '='.
+    const escapeCsv = (value: string | undefined | null): string => {
+      const v = value ?? "";
+      const sanitized = /^[=+\-@]/.test(v) ? `'${v}` : v;
+      return `"${sanitized.replace(/"/g, '""')}"`;
+    };
+    const csv = [headers, ...rows]
+      .map((r) => r.map(escapeCsv).join(","))
+      .join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

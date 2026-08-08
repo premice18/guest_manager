@@ -3,11 +3,12 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
+import { useReceptionStore } from "@/lib/store/reception-store";
 import { isSafeRedirect } from "@/lib/redirect";
 import { Button } from "@/components/ui/button";
 import {
@@ -68,8 +69,16 @@ type LoginForm = z.infer<typeof loginSchema>;
 export default function LoginPage() {
   const prefersReducedMotion = useReducedMotion();
   const router = useRouter();
-  const supabase = createClient();
+  // Client Supabase créé une seule fois (état paresseux) — fix audit.
+  const [supabase] = useState(() => createClient());
   const [showPassword, setShowPassword] = useState(false);
+  // Au montage, on purge le store local de la réception : un utilisateur qui
+  // revient à l'écran de connexion (post-logout) ne doit pas laisser les
+  // invités/actions de son précédent compte dans le stockage persistant
+  // (fix audit : fuite inter-comptes). Navire vite côté localStorage.
+  useEffect(() => {
+    useReceptionStore.getState().clearAll();
+  }, []);
   // Route d'origine (fournie par le proxy) pour y revenir après connexion
   // Seuls les chemins locaux sûrs sont acceptés (même logique que le callback)
   const nextPath =
