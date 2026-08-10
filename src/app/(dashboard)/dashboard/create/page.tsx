@@ -152,7 +152,7 @@ export default function CreateEventPage() {
                 <Sparkles className="size-8 text-gold" />
               </div>
             </motion.div>
-            <CardTitle className="text-center font-serif text-2xl text-deep-black">
+            <CardTitle className="text-center font-serif text-2xl text-foreground">
               Nouvel événement
             </CardTitle>
             <CardDescription className="text-center">

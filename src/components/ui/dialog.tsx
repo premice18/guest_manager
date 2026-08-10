@@ -30,7 +30,7 @@ function Dialog({
         <DialogPrimitive.Portal>
           <DialogPrimitive.Backdrop className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 transition-opacity duration-200" />
           <DialogPrimitive.Popup aria-labelledby={titleId} aria-describedby={descriptionId} className="fixed inset-0 z-50 mx-auto flex items-center justify-center p-4 data-[ending-style]:scale-95 data-[starting-style]:scale-95 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0 transition-all duration-200">
-            <div className="relative w-full max-w-lg rounded-xl bg-white p-6 shadow-xl outline-none">
+            <div className="relative w-full max-w-lg rounded-xl bg-popover p-6 text-popover-foreground shadow-xl outline-none">
               <DialogPrimitive.Close className="absolute right-4 top-4 flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
                 <X className="size-4" />
                 <span className="sr-only">Fermer</span>

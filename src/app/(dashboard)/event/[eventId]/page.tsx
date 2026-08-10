@@ -58,7 +58,7 @@ export default async function EventDetailPage({
             <Calendar className="size-7 text-white" />
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="font-serif text-3xl tracking-tight text-deep-black">
+            <h1 className="font-serif text-3xl tracking-tight text-foreground">
               {event.name}
             </h1>
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
@@ -95,7 +95,7 @@ export default async function EventDetailPage({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-deep-black">
+            <p className="text-3xl font-bold text-foreground">
               {guestStats.total}
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
@@ -114,7 +114,7 @@ export default async function EventDetailPage({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-deep-black">
+            <p className="text-3xl font-bold text-foreground">
               {tableCounts.totalTables}
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
@@ -190,7 +190,7 @@ export default async function EventDetailPage({
                 <Users className="size-6 text-white" />
               </div>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-deep-black">Gestion des invités</CardTitle>
+                <CardTitle className="text-foreground">Gestion des invités</CardTitle>
                 <ArrowRight className="size-4 text-gold opacity-0 transition-all duration-300 group-hover:translate-x-1 group-hover:opacity-100" />
               </div>
             </CardHeader>
@@ -212,7 +212,7 @@ export default async function EventDetailPage({
                 <Table className="size-6 text-white" />
               </div>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-deep-black">Tables & zones</CardTitle>
+                <CardTitle className="text-foreground">Tables & zones</CardTitle>
                 <ArrowRight className="size-4 text-gold opacity-0 transition-all duration-300 group-hover:translate-x-1 group-hover:opacity-100" />
               </div>
             </CardHeader>
@@ -234,7 +234,7 @@ export default async function EventDetailPage({
                 <LayoutDashboard className="size-6 text-white" />
               </div>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-deep-black">Plan de salle</CardTitle>
+                <CardTitle className="text-foreground">Plan de salle</CardTitle>
                 <ArrowRight className="size-4 text-gold opacity-0 transition-all duration-300 group-hover:translate-x-1 group-hover:opacity-100" />
               </div>
             </CardHeader>
@@ -256,7 +256,7 @@ export default async function EventDetailPage({
                 <Settings className="size-6 text-white" />
               </div>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-deep-black">Paramètres</CardTitle>
+                <CardTitle className="text-foreground">Paramètres</CardTitle>
                 <ArrowRight className="size-4 text-gold opacity-0 transition-all duration-300 group-hover:translate-x-1 group-hover:opacity-100" />
               </div>
             </CardHeader>
@@ -278,7 +278,7 @@ export default async function EventDetailPage({
                 <BarChart3 className="size-6 text-white" />
               </div>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-deep-black">Tableau de bord</CardTitle>
+                <CardTitle className="text-foreground">Tableau de bord</CardTitle>
                 <ArrowRight className="size-4 text-gold opacity-0 transition-all duration-300 group-hover:translate-x-1 group-hover:opacity-100" />
               </div>
             </CardHeader>
@@ -300,7 +300,7 @@ export default async function EventDetailPage({
                 <FileText className="size-6 text-white" />
               </div>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-deep-black">Rapports</CardTitle>
+                <CardTitle className="text-foreground">Rapports</CardTitle>
                 <ArrowRight className="size-4 text-gold opacity-0 transition-all duration-300 group-hover:translate-x-1 group-hover:opacity-100" />
               </div>
             </CardHeader>

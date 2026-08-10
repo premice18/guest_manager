@@ -21,6 +21,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 
 // ===== Variantes d'animation Framer Motion =====
 const fadeUp = {
@@ -84,16 +85,16 @@ export default function LandingPage() {
   // Écran de chargement le temps de vérifier la session
   if (isChecking) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-off-white">
+      <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="size-10 animate-spin rounded-full border-[3px] border-gold/20 border-t-gold" />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-off-white">
+    <div className="flex min-h-screen flex-col bg-background">
       {/* ===== Header / Navigation ===== */}
-      <header className="border-b border-border bg-white/80 backdrop-blur-sm transition-colors">
+      <header className="border-b border-border bg-card/80 backdrop-blur-sm transition-colors">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
           {/* Logo */}
           <Link
@@ -117,10 +118,13 @@ export default function LandingPage() {
           <nav className="flex items-center gap-3">
             <Link
               href="/login"
-              className="hidden rounded-lg px-3 py-2 text-sm font-medium text-anthracite transition-colors hover:bg-muted sm:inline-block"
+              className="hidden rounded-lg px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted sm:inline-block"
             >
               Se connecter
             </Link>
+            <ThemeToggle compact
+              className="hidden sm:inline-flex"
+            />
             <Link href="/register">
               <Button size="sm">S&rsquo;inscrire</Button>
             </Link>
@@ -176,7 +180,7 @@ export default function LandingPage() {
             {/* Titre principal */}
             <motion.h1
               variants={fadeUp}
-              className="font-serif text-4xl leading-tight text-deep-black sm:text-5xl lg:text-6xl"
+              className="font-serif text-4xl leading-tight text-foreground sm:text-5xl lg:text-6xl"
             >
               Guest Manager
             </motion.h1>
@@ -192,7 +196,7 @@ export default function LandingPage() {
             {/* Description */}
             <motion.p
               variants={fadeUp}
-              className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-anthracite sm:text-lg"
+              className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-foreground/80 sm:text-lg"
             >
               Organisez vos événements avec élégance : gérez vos
               invités, créez votre plan de table et accueillez en temps
@@ -249,7 +253,7 @@ export default function LandingPage() {
             >
               <motion.h2
                 variants={fadeUp}
-                className="font-serif text-3xl text-deep-black sm:text-4xl"
+                className="font-serif text-3xl text-foreground sm:text-4xl"
               >
                 Tout ce qu&rsquo;il vous faut
               </motion.h2>
@@ -276,7 +280,7 @@ export default function LandingPage() {
                 whileHover={prefersReducedMotion ? {} : { scale: 1.02 }}
                 whileTap={prefersReducedMotion ? {} : { scale: 0.98 }}
               >
-                <Card className="group border-border/60 bg-white shadow-sm transition-all duration-300 hover:shadow-md hover:border-l-2 hover:border-l-gold">
+                <Card className="group border-border/60 bg-card shadow-sm transition-all duration-300 hover:shadow-md hover:border-l-2 hover:border-l-gold">
                   <CardHeader>
                     <div className="mb-3 flex size-12 items-center justify-center rounded-lg bg-gold/10 transition-colors group-hover:bg-gold/20">
                       <Users className="size-6 text-gold transition-colors" />
@@ -298,7 +302,7 @@ export default function LandingPage() {
                 whileHover={prefersReducedMotion ? {} : { scale: 1.02 }}
                 whileTap={prefersReducedMotion ? {} : { scale: 0.98 }}
               >
-                <Card className="group border-border/60 bg-white shadow-sm transition-all duration-300 hover:shadow-md hover:border-l-2 hover:border-l-gold">
+                <Card className="group border-border/60 bg-card shadow-sm transition-all duration-300 hover:shadow-md hover:border-l-2 hover:border-l-gold">
                   <CardHeader>
                     <div className="mb-3 flex size-12 items-center justify-center rounded-lg bg-gold/10 transition-colors group-hover:bg-gold/20">
                       <LayoutDashboard className="size-6 text-gold transition-colors" />
@@ -320,7 +324,7 @@ export default function LandingPage() {
                 whileHover={prefersReducedMotion ? {} : { scale: 1.02 }}
                 whileTap={prefersReducedMotion ? {} : { scale: 0.98 }}
               >
-                <Card className="group border-border/60 bg-white shadow-sm transition-all duration-300 hover:shadow-md hover:border-l-2 hover:border-l-gold">
+                <Card className="group border-border/60 bg-card shadow-sm transition-all duration-300 hover:shadow-md hover:border-l-2 hover:border-l-gold">
                   <CardHeader>
                     <div className="mb-3 flex size-12 items-center justify-center rounded-lg bg-gold/10 transition-colors group-hover:bg-gold/20">
                       <QrCode className="size-6 text-gold transition-colors" />
@@ -342,7 +346,7 @@ export default function LandingPage() {
                 whileHover={prefersReducedMotion ? {} : { scale: 1.02 }}
                 whileTap={prefersReducedMotion ? {} : { scale: 0.98 }}
               >
-                <Card className="group border-border/60 bg-white shadow-sm transition-all duration-300 hover:shadow-md hover:border-l-2 hover:border-l-gold">
+                <Card className="group border-border/60 bg-card shadow-sm transition-all duration-300 hover:shadow-md hover:border-l-2 hover:border-l-gold">
                   <CardHeader>
                     <div className="mb-3 flex size-12 items-center justify-center rounded-lg bg-gold/10 transition-colors group-hover:bg-gold/20">
                       <FileText className="size-6 text-gold transition-colors" />
@@ -421,7 +425,7 @@ export default function LandingPage() {
       </main>
 
       {/* ===== Footer ===== */}
-      <footer className="border-t border-border bg-white px-4 py-8 sm:px-6">
+      <footer className="border-t border-border bg-card px-4 py-8 sm:px-6">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 sm:flex-row sm:justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="size-4 text-gold" />

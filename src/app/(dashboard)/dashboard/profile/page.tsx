@@ -40,6 +40,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/lib/hooks/use-theme";
 
 type ProfileTab = "profile" | "security" | "preferences";
 
@@ -170,6 +171,7 @@ export default function ProfilePage() {
   const [changingPassword, setChangingPassword] = useState(false);
 
   // Préférences
+  const { setTheme: applyThemeImmediately } = useTheme();
   const [theme, setTheme] = useState("light");
   const [notifications, setNotifications] = useState(true);
   const [language, setLanguage] = useState("fr");
@@ -392,7 +394,7 @@ export default function ProfilePage() {
         Tableau de bord
       </Link>
 
-      <h1 className="mb-8 font-serif text-3xl text-deep-black">Mon profil</h1>
+      <h1 className="mb-8 font-serif text-3xl text-foreground">Mon profil</h1>
 
       <div className="flex flex-col gap-8 lg:flex-row">
         {/* Barre latérale de navigation */}
@@ -725,7 +727,12 @@ export default function ProfilePage() {
                     {["light", "dark"].map((t) => (
                       <button
                         key={t}
-                        onClick={() => setTheme(t)}
+                        onClick={() => {
+                          // Applique immédiatement le thème (transition douce)
+                          // avant même la sauvegarde du profil côté Supabase.
+                          setTheme(t);
+                          applyThemeImmediately(t as "light" | "dark");
+                        }}
                         className={cn(
                           "flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm transition-colors",
                           theme === t

@@ -98,7 +98,7 @@ function DraggableGuest({ guest, compact }: { guest: Guest; compact?: boolean })
       {...attributes}
       style={style}
       className={cn(
-        "flex cursor-grab items-center gap-2 rounded-lg border border-border bg-white px-3 py-2 text-sm shadow-sm transition-shadow active:cursor-grabbing",
+        "flex cursor-grab items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-sm transition-shadow active:cursor-grabbing",
         isDragging && "opacity-50 shadow-lg ring-2 ring-gold",
         compact && "px-2 py-1.5 text-xs"
       )}
@@ -176,7 +176,7 @@ function DroppableTable({
             ? "border-gold bg-gold/5 shadow-md shadow-gold/10"
             : isOver && isFull
               ? "border-red-300 bg-red-50"
-              : "border-border bg-white hover:border-gold/50 hover:shadow-sm"
+              : "border-border bg-card hover:border-gold/50 hover:shadow-sm"
       )}
       initial={prefersReducedMotion ? false : { opacity: 0, y: 16 }}
       animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
@@ -691,7 +691,7 @@ export default function PlacementPage({
           <ArrowLeft className="size-4" />
           Retour
         </Link>
-        <h1 className="font-serif text-2xl text-deep-black sm:text-3xl">
+        <h1 className="font-serif text-2xl text-foreground sm:text-3xl">
           Plan de salle
         </h1>
       </div>
@@ -825,7 +825,7 @@ export default function PlacementPage({
                 initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.97 }}
                 animate={prefersReducedMotion ? {} : { opacity: 1, scale: 1 }}
                 transition={{ type: "spring" as const, stiffness: 200, damping: 24 }}
-                className="rounded-xl border-2 border-dashed border-border bg-white p-12 text-center"
+                className="rounded-xl border-2 border-dashed border-border bg-card p-12 text-center"
               >
                 <motion.div
                   animate={prefersReducedMotion ? {} : { y: [0, -6, 0] }}
@@ -857,10 +857,10 @@ export default function PlacementPage({
                 animate={prefersReducedMotion ? {} : { scale: 1, opacity: 1, rotate: 0 }}
                 exit={prefersReducedMotion ? {} : { scale: 0.9, opacity: 0 }}
                 transition={{ type: "spring" as const, stiffness: 300, damping: 20 }}
-                className="flex items-center gap-2 rounded-xl border-2 border-gold bg-white px-4 py-3 shadow-xl shadow-gold/20"
+                className="flex items-center gap-2 rounded-xl border-2 border-gold bg-card px-4 py-3 shadow-xl shadow-gold/20"
               >
                 <GripVertical className="size-4 text-gold" />
-                <span className="font-semibold text-deep-black">
+                <span className="font-semibold text-foreground">
                   {activeGuest.first_name} {activeGuest.last_name}
                 </span>
                 {activeGuest.group_name && (
@@ -883,7 +883,7 @@ export default function PlacementPage({
             transition={{ type: "spring" as const, stiffness: 260, damping: 24 }}
           >
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-deep-black">
+              <DialogTitle className="flex items-center gap-2 text-foreground">
                 <AlertTriangle className="size-5 text-gold" />
                 Confirmer le déplacement
               </DialogTitle>

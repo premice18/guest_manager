@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 
 // Layout partagé pour toutes les pages du dashboard (events, event details, etc.)
 export default function DashboardLayout({
@@ -8,9 +9,9 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-off-white">
+    <div className="min-h-screen bg-background">
       {/* Barre de navigation supérieure */}
-      <header className="sticky top-0 z-50 border-b border-border bg-white/90 backdrop-blur-sm">
+      <header className="sticky top-0 z-50 border-b border-border bg-card/90 backdrop-blur-sm">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
           <Link
             href="/dashboard"
@@ -49,6 +50,7 @@ export default function DashboardLayout({
               Profil
               <span className="absolute -bottom-1 left-0 h-0.5 w-0 bg-gold transition-all duration-300 group-hover:w-full" />
             </Link>
+            <ThemeToggle compact />
           </nav>
         </div>
         {/* Ligne d'accentuation dorée sous le header */}

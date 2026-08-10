@@ -266,7 +266,7 @@ export default function EventSettingsPage({
         initial={prefersReducedMotion ? false : { opacity: 0, y: 16 }}
         animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
         transition={{ type: "spring" as const, stiffness: 200, damping: 24 }}
-        className="mb-8 font-serif text-3xl text-deep-black"
+        className="mb-8 font-serif text-3xl text-foreground"
       >
         Paramètres
       </motion.h1>

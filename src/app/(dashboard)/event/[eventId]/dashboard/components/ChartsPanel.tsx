@@ -18,6 +18,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useChartColors } from "@/lib/charts/colors";
 
 // Composant « charts » isolé du dashboard pour être chargé en dynamic import
 // (next/dynamic), de façon à ne pas embarquer Recharts (lourd) dans le bundle
@@ -37,16 +38,6 @@ const graphVariants = {
   }),
 };
 
-const CATEGORY_COLORS = [
-  "#C9A96E", "#4CAF50", "#2196F3", "#FF9800",
-  "#9C27B0", "#F44336", "#00BCD4", "#607D8B",
-];
-
-const AGE_BAR_COLORS = {
-  inscrits: "#C9A96E",
-  presents: "#4CAF50",
-};
-
 interface TooltipPayloadItem {
   value?: number | string | Array<number | string>;
   name?: string | number;
@@ -64,7 +55,7 @@ interface BaseTooltipProps {
 function ArrivalsTooltip({ active, payload, label }: BaseTooltipProps) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border border-border bg-white px-3 py-2 shadow-lg">
+    <div className="rounded-lg border border-border bg-popover px-3 py-2 shadow-lg">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <p className="text-sm font-bold text-gold">{payload[0].value} arrivée(s)</p>
     </div>
@@ -75,7 +66,7 @@ function CategoryTooltip({ active, payload }: BaseTooltipProps) {
   if (!active || !payload?.length) return null;
   const data = payload[0];
   return (
-    <div className="rounded-lg border border-border bg-white px-3 py-2 shadow-lg">
+    <div className="rounded-lg border border-border bg-popover px-3 py-2 shadow-lg">
       <p className="text-xs font-medium text-muted-foreground">{data.name}</p>
       <p className="text-sm font-bold" style={{ color: data.color }}>
         {data.value} invité{data.value !== 1 ? "s" : ""}
@@ -87,7 +78,7 @@ function CategoryTooltip({ active, payload }: BaseTooltipProps) {
 function AgeTooltip({ active, payload, label }: BaseTooltipProps) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border border-border bg-white px-3 py-2 shadow-lg">
+    <div className="rounded-lg border border-border bg-popover px-3 py-2 shadow-lg">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       {payload.map((entry, idx) => (
         <p key={idx} className="text-sm font-bold" style={{ color: entry.color }}>
@@ -111,7 +102,7 @@ function TableTooltip({ active, payload }: BaseTooltipProps) {
   const data = payload[0]?.payload as TableOccupancyItem | undefined;
   if (!data) return null;
   return (
-    <div className="rounded-lg border border-border bg-white px-3 py-2 shadow-lg">
+    <div className="rounded-lg border border-border bg-popover px-3 py-2 shadow-lg">
       <p className="text-xs font-medium text-muted-foreground">{data.name}</p>
       <p className="text-sm font-bold" style={{ color: data.fill }}>
         {data.guests}/{data.capacity} ({Math.round(data.percentage ?? 0)}%)
@@ -136,6 +127,8 @@ export default function ChartsPanel({
   tableOccupancy,
 }: ChartsPanelProps) {
   const prefersReducedMotion = useReducedMotion();
+  // Couleurs lues depuis les tokens CSS : suit automatiquement le thème
+  const colors = useChartColors();
 
   return (
     <div className="mb-8 grid gap-6 lg:grid-cols-2">
@@ -160,18 +153,18 @@ export default function ChartsPanel({
                   <AreaChart data={arrivalsByHour} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
                     <defs>
                       <linearGradient id="arrivalsGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#C9A96E" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#C9A96E" stopOpacity={0} />
+                        <stop offset="5%" stopColor={colors.gold} stopOpacity={0.3} />
+                        <stop offset="95%" stopColor={colors.gold} stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="hour" tick={{ fontSize: 12 }} stroke="#999" />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} stroke="#999" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
+                    <XAxis dataKey="hour" tick={{ fontSize: 12 }} stroke={colors.axis} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} stroke={colors.axis} />
                     <Tooltip content={<ArrivalsTooltip />} />
                     <Area
                       type="monotone"
                       dataKey="count"
-                      stroke="#C9A96E"
+                      stroke={colors.gold}
                       strokeWidth={2}
                       fill="url(#arrivalsGradient)"
                     />
@@ -219,7 +212,7 @@ export default function ChartsPanel({
                       {categoryDistribution.map((entry, idx) => (
                         <Cell
                           key={entry.name}
-                          fill={CATEGORY_COLORS[idx % CATEGORY_COLORS.length]}
+                          fill={colors.category[idx % colors.category.length]}
                         />
                       ))}
                     </Pie>
@@ -227,7 +220,7 @@ export default function ChartsPanel({
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="pointer-events-none absolute flex flex-col items-center">
-                  <span className="text-2xl font-bold text-deep-black">{totalGuests}</span>
+                  <span className="text-2xl font-bold text-foreground">{totalGuests}</span>
                   <span className="text-xs text-muted-foreground">total</span>
                 </div>
               </div>
@@ -259,9 +252,9 @@ export default function ChartsPanel({
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={ageDistribution} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#999" />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} stroke="#999" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
+                    <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke={colors.axis} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} stroke={colors.axis} />
                     <Tooltip content={<AgeTooltip />} />
                     <Legend
                       verticalAlign="bottom"
@@ -274,14 +267,14 @@ export default function ChartsPanel({
                     <Bar
                       dataKey="inscrits"
                       name="Inscrits"
-                      fill={AGE_BAR_COLORS.inscrits}
+                      fill={colors.gold}
                       radius={[4, 4, 0, 0]}
                       maxBarSize={48}
                     />
                     <Bar
                       dataKey="presents"
                       name="Présents"
-                      fill={AGE_BAR_COLORS.presents}
+                      fill={colors.success}
                       radius={[4, 4, 0, 0]}
                       maxBarSize={48}
                     />
@@ -320,9 +313,9 @@ export default function ChartsPanel({
                     layout="vertical"
                     margin={{ top: 5, right: 30, left: 20, bottom: 0 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 12 }} stroke="#999" domain={[0, 100]} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} stroke="#999" width={60} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 12 }} stroke={colors.axis} domain={[0, 100]} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} stroke={colors.axis} width={60} />
                     <Tooltip content={<TableTooltip />} />
                     <Bar dataKey="percentage" name="Occupation" radius={[0, 4, 4, 0]} maxBarSize={20}>
                       {tableOccupancy.map((entry, idx) => (

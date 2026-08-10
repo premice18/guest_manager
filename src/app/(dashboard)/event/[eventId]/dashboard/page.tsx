@@ -373,7 +373,7 @@ export default function DashboardStatsPage({
         className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
       >
         <div>
-          <h1 className="font-serif text-3xl tracking-tight text-deep-black">
+          <h1 className="font-serif text-3xl tracking-tight text-foreground">
             Tableau de bord
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -445,7 +445,7 @@ export default function DashboardStatsPage({
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold text-deep-black">{totalGuests}</p>
+              <p className="text-3xl font-bold text-foreground">{totalGuests}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {placedGuests} placé{placedGuests !== 1 ? "s" : ""}
               </p>
@@ -470,7 +470,7 @@ export default function DashboardStatsPage({
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold text-deep-black">{presentCount}</p>
+              <p className="text-3xl font-bold text-foreground">{presentCount}</p>
               <div className="mt-2 flex items-center gap-2">
                 <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
                   <div
@@ -503,7 +503,7 @@ export default function DashboardStatsPage({
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold text-deep-black">
+              <p className="text-3xl font-bold text-foreground">
                 {Math.round(occupancyRate)}%
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
@@ -530,7 +530,7 @@ export default function DashboardStatsPage({
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold text-deep-black">
+              <p className="text-3xl font-bold text-foreground">
                 {vipPresent.length}
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">

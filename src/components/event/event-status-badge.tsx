@@ -17,8 +17,8 @@ const STATUS_STYLES: Record<string, Status> = {
   },
   AVenir: {
     label: "À venir",
-    container: "bg-green-100 text-green-700 ring-1 ring-green-200",
-    dot: "bg-green-500",
+    container: "bg-success-bg text-success-text ring-1 ring-success/20",
+    dot: "bg-success",
   },
   Termine: {
     label: "Terminé",

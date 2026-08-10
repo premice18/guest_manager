@@ -351,7 +351,7 @@ useEffect(() => {
         transition={{ type: "spring" as const, stiffness: 200, damping: 24 }}
         className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
-        <h1 className="font-serif text-3xl text-deep-black">Tables</h1>
+        <h1 className="font-serif text-3xl text-foreground">Tables</h1>
         <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
           <Button onClick={() => openModal()}>
             <Plus className="mr-1.5 size-4" />
@@ -534,7 +534,7 @@ useEffect(() => {
           initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.97 }}
           animate={prefersReducedMotion ? {} : { opacity: 1, scale: 1 }}
           transition={{ type: "spring" as const, stiffness: 200, damping: 24 }}
-          className="rounded-xl border-2 border-dashed border-border bg-white p-12 text-center"
+          className="rounded-xl border-2 border-dashed border-border bg-card p-12 text-center"
         >
           <motion.div
             animate={prefersReducedMotion ? {} : { y: [0, -6, 0] }}
