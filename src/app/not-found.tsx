@@ -9,7 +9,7 @@ export default function NotFound() {
         <span className="font-serif text-3xl font-bold text-white">GM</span>
       </div>
       <p className="font-serif text-7xl font-bold text-gold">404</p>
-      <h1 className="mt-4 font-serif text-2xl text-deep-black">
+      <h1 className="mt-4 font-serif text-2xl text-foreground">
         Page introuvable
       </h1>
       <p className="mt-2 max-w-md text-muted-foreground">

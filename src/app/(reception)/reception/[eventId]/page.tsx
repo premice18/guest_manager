@@ -599,7 +599,7 @@ export default function ReceptionPage({
 
   if (loading) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-off-white">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background">
         <motion.div
           animate={prefersReducedMotion ? {} : { rotate: 360 }}
           transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
@@ -613,13 +613,13 @@ export default function ReceptionPage({
   }
 
   return (
-    <div className="min-h-screen bg-off-white">
+    <div className="min-h-screen bg-background">
       {/* ===== En-tête ===== */}
       <motion.header
         initial={prefersReducedMotion ? false : { y: -60, opacity: 0 }}
         animate={prefersReducedMotion ? {} : { y: 0, opacity: 1 }}
         transition={{ type: "spring", stiffness: 180, damping: 20 }}
-        className="sticky top-0 z-40 border-b border-border bg-white shadow-sm"
+        className="sticky top-0 z-40 border-b border-border bg-card shadow-sm"
       >
         <div className="mx-auto max-w-5xl px-3 py-2 sm:px-4 sm:py-3">
           <div className="flex items-center justify-between">
@@ -752,7 +752,7 @@ export default function ReceptionPage({
                   "flex size-8 shrink-0 items-center justify-center rounded-md text-xs font-medium transition-colors",
                   !filterLetter
                     ? "bg-gold text-deep-black"
-                    : "bg-white text-muted-foreground hover:bg-muted",
+                    : "bg-card text-muted-foreground hover:bg-muted",
                 )}
                 aria-label="Toutes les lettres"
               >
@@ -769,7 +769,7 @@ export default function ReceptionPage({
                     "flex size-8 shrink-0 items-center justify-center rounded-md text-xs font-medium transition-colors",
                     filterLetter === letter
                       ? "bg-gold text-deep-black"
-                      : "bg-white text-muted-foreground hover:bg-muted",
+                      : "bg-card text-muted-foreground hover:bg-muted",
                   )}
                   aria-label={`Lettre ${letter}`}
                   aria-pressed={filterLetter === letter}
@@ -784,7 +784,7 @@ export default function ReceptionPage({
             <Select
               value={filterTable}
               onValueChange={setFilterTable}
-              className="w-auto bg-white"
+              className="w-auto bg-card"
               aria-label="Filtrer par table"
             >
               <SelectItem value="all">Toutes les tables</SelectItem>
@@ -799,7 +799,7 @@ export default function ReceptionPage({
             <Select
               value={filterStatus}
               onValueChange={setFilterStatus}
-              className="w-auto bg-white"
+              className="w-auto bg-card"
               aria-label="Filtrer par statut"
             >
               <SelectItem value="all">Tous</SelectItem>
@@ -809,7 +809,7 @@ export default function ReceptionPage({
 
             <motion.div
               whileTap={prefersReducedMotion ? {} : { scale: 0.95 }}
-              className="inline-flex overflow-hidden rounded-lg border border-input bg-white"
+              className="inline-flex overflow-hidden rounded-lg border border-input bg-card"
             >
               <button
                 onClick={() => setViewMode("list")}
@@ -844,7 +844,7 @@ export default function ReceptionPage({
             {/* Bouton stats (mobile) */}
             <button
               onClick={() => setStatsOpen(!statsOpen)}
-              className="flex h-10 items-center gap-1.5 rounded-lg border border-input bg-white px-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground sm:hidden"
+              className="flex h-10 items-center gap-1.5 rounded-lg border border-input bg-card px-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground sm:hidden"
               aria-expanded={statsOpen}
               aria-label="Statistiques"
             >
@@ -940,8 +940,8 @@ export default function ReceptionPage({
                           className={cn(
                             "flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all active:scale-[0.98]",
                             guest.is_present
-                              ? "border-green-200 bg-green-50"
-                              : "border-border bg-white hover:border-gold/50 hover:shadow-sm",
+                              ? "border-success/30 bg-success-bg"
+                              : "border-border bg-card hover:border-gold/50 hover:shadow-sm",
                           )}
                           aria-label={
                             guest.is_present
@@ -1043,7 +1043,7 @@ export default function ReceptionPage({
                     key="empty"
                     initial={prefersReducedMotion ? false : { opacity: 0, y: 10 }}
                     animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
-                    className="rounded-xl border-2 border-dashed border-border bg-white p-8 text-center"
+                    className="rounded-xl border-2 border-dashed border-border bg-card p-8 text-center"
                   >
                     <motion.div
                       animate={prefersReducedMotion ? {} : { y: [0, -6, 0] }}
@@ -1109,7 +1109,7 @@ export default function ReceptionPage({
                         key={group.members[0]?.group_id ?? `g-${idx}`}
                         variants={itemVariants}
                         layout
-                        className="rounded-xl border border-border bg-white shadow-sm"
+                        className="rounded-xl border border-border bg-card shadow-sm"
                       >
                         <div className="flex items-center justify-between border-b border-border px-4 py-3">
                           <div className="flex items-center gap-2">
@@ -1209,7 +1209,7 @@ export default function ReceptionPage({
                   <motion.div
                     initial={prefersReducedMotion ? false : { opacity: 0, y: 10 }}
                     animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
-                    className="rounded-xl border-2 border-dashed border-border bg-white p-8 text-center"
+                    className="rounded-xl border-2 border-dashed border-border bg-card p-8 text-center"
                   >
                     <motion.div
                       animate={prefersReducedMotion ? {} : { y: [0, -4, 0] }}
@@ -1246,8 +1246,8 @@ export default function ReceptionPage({
                             className={cn(
                               "flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all",
                               guest.is_present
-                                ? "border-green-200 bg-green-50"
-                                : "border-border bg-white hover:border-gold/50",
+                                ? "border-success/30 bg-success-bg"
+                                : "border-border bg-card hover:border-gold/50",
                             )}
                           >
                             <div
@@ -1315,7 +1315,7 @@ export default function ReceptionPage({
               />
               {/* Liste des tables avec remplissage */}
               {tables.length > 0 && (
-                <div className="rounded-xl border border-border bg-white p-4">
+                <div className="rounded-xl border border-border bg-card p-4">
                   <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Capacité des tables
                   </h3>

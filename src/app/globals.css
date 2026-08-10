@@ -186,4 +186,27 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  /* Transition de base pour un changement de thème doux */
+  transition: background-color 300ms ease, color 300ms ease;
+}
+
+/* Transition fluide appliquée temporairement pendant la bascule de thème.
+   La classe "theme-anim" est posée sur <html> par useTheme() (hook) juste
+   avant le changement de valeur des variables CSS, puis retirée après ~350ms.
+   Astuce : les variables CSS ne transitionnent pas elles-mêmes, mais toutes
+   les propriétés (background-color, color, border-color...) qui les utilisent
+   s'animent naturellement entre leurs valeurs calculées. */
+@media (prefers-reduced-motion: no-preference) {
+  html.theme-anim,
+  html.theme-anim *,
+  html.theme-anim *::before,
+  html.theme-anim *::after {
+    transition:
+      background-color 300ms ease,
+      border-color 300ms ease,
+      color 300ms ease,
+      fill 300ms ease,
+      stroke 300ms ease,
+      box-shadow 300ms ease !important;
+  }
 }

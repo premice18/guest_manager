@@ -143,7 +143,25 @@ src/
 3. **Phase 3 – Front-Desk** ✅
 4. **Phase 4 – Exports** ✅
 5. **Phase 5 – Audit & Corrections** ✅ (corrections A1–A10 et B1–B6 terminées)
-6. **Phase 6 – Optimisations** ⏳ (en cours : PWA ✅, refactor réception, sélecteurs uniformisés, documentation)
+6. **Phase 6 – Optimisations** ⏳ (en cours : PWA ✅, refactor réception, sélecteurs uniformisés, documentation, **mode sombre/clair unifié ✅, tri alphabétique des invités ✅**)
+
+---
+
+## 📝 6bis. Audit UX/UI — Corrections mode sombre/clair & tri
+
+### Mode sombre/clair (unifié)
+- **Socle thème** : hook `src/lib/hooks/use-theme.ts` (lecture/écriture `localStorage 'theme'`, synchronisation inter-onglets, application de la classe `.dark`, animation de transition `theme-anim`), toggle `src/components/theme/theme-toggle.tsx`.
+- **Transitions** : règles CSS `html.theme-anim *` dans `globals.css` (durée 300ms, désactivées via `prefers-reduced-motion`), transition de base sur `body`.
+- **Tokens sémantiques** : remplacement des couleurs `bg-white`/`text-deep-black`/`bg-anthracite text-white` par `bg-card`, `text-foreground`, `bg-popover`, `bg-muted`, etc. (dashboard, guests, tables, placement, reports, reception, landing, error/loading/404, UI primitives).
+- **Graphiques Recharts** : `src/lib/charts/colors.ts` lit les variables CSS via `getComputedStyle` (hook `useChartColors`) ; tooltips sur `bg-popover`.
+- **Toaster sonner** : suit le thème de l'application (plus `theme="system"`).
+- **Toggle de thème** : présent dans le header du dashboard et la landing ; le sélecteur du profil (Préférences) applique le thème immédiatement.
+- Contrastes : textes dorés réservés au branding ; tout texte courant passe par `text-foreground` / `text-muted-foreground` (≥ 4.5:1).
+
+### Tri alphabétique invités (`/event/[id]/guests`)
+- Tri client par **Nom, Prénom, Table, Statut** avec sens A→Z/Z→A (bouton dédié).
+- Appliqué **en plus** des filtres (recherche, statut, âge, table), par défaut **Nom A→Z**.
+- Persistance dans `localStorage` (`gm-sort-field`, `gm-sort-dir`) ; accessible clavier (select natif + bouton).
 
 ---
 

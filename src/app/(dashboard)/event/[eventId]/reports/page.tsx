@@ -209,7 +209,7 @@ const [downloading, setDownloading] = useState<string | null>(null);
         transition={{ type: "spring" as const, stiffness: 200, damping: 24 }}
         className="mb-8"
       >
-        <h1 className="font-serif text-3xl tracking-tight text-deep-black">
+        <h1 className="font-serif text-3xl tracking-tight text-foreground">
           Rapports
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -240,7 +240,7 @@ const [downloading, setDownloading] = useState<string | null>(null);
                   )}>
                     <Icon className="size-6 text-white" />
                   </div>
-                  <CardTitle className="text-lg text-deep-black">
+                  <CardTitle className="text-lg text-foreground">
                     {exp.title}
                   </CardTitle>
                 </CardHeader>

@@ -31,12 +31,14 @@ import {
   Upload,
   Download,
   Users,
-Table as TableIcon,
+  Table as TableIcon,
   X,
   Check,
   CircleUser,
   Baby,
   UserPlus,
+  ArrowUpNarrowWide,
+  ArrowDownWideNarrow,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
@@ -47,6 +49,18 @@ type Table = Database["public"]["Tables"]["tables"]["Row"];
 interface GuestWithTable extends Guest {
   tables?: { name: string } | null;
 }
+
+// Critères de tri de la liste des invités
+type SortField = "last_name" | "first_name" | "table" | "status";
+type SortDir = "asc" | "desc";
+
+// Libellés d'accessibilité des critères de tri
+const SORT_FIELD_LABELS: Record<SortField, string> = {
+  last_name: "Nom",
+  first_name: "Prénom",
+  table: "Table",
+  status: "Statut",
+};
 
 const AGE_LABELS: Record<string, string> = {
   adult: "Adulte",
@@ -145,6 +159,38 @@ const [filterPresent, setFilterPresent] = useState<string>("all");
   const [filterTableId, setFilterTableId] = useState("all");
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 50;
+
+  // Tri alphabétique : champ + direction. L'état initial est relu depuis le
+  // localStorage pour conserver le tri choisi entre deux visites de la page.
+  const [sortBy, setSortBy] = useState<SortField>(() => {
+    if (typeof window === "undefined") return "last_name";
+    const v = window.localStorage.getItem("gm-sort-field");
+    return v === "first_name" || v === "table" || v === "status"
+      ? v
+      : "last_name";
+  });
+  const [sortDir, setSortDir] = useState<SortDir>(() => {
+    if (typeof window === "undefined") return "asc";
+    return window.localStorage.getItem("gm-sort-dir") === "desc"
+      ? "desc"
+      : "asc";
+  });
+
+  // Persiste le tri dans le localStorage (champ + direction) à chaque changement
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("gm-sort-field", sortBy);
+    } catch {
+      // Stockage indisponible : le tri reste simplement en mémoire
+    }
+  }, [sortBy]);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("gm-sort-dir", sortDir);
+    } catch {
+      // Stockage indisponible : le tri reste simplement en mémoire
+    }
+  }, [sortDir]);
 
   // Droits d'écriture : le propriétaire et les admins peuvent tout faire,
   // les hôtes sont en lecture seule (la présence se gère depuis la réception).
@@ -520,11 +566,50 @@ if (filterPresent === "absent" && g.is_present) return false;
     return true;
   });
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  // Tri alphabétique appliqué EN PLUS des filtres ci-dessus. Le tri est
+  // effectué côté client (toutes les données sont déjà chargées, la
+  // pagination est locale) — aucun aller-retour serveur supplémentaire.
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    const dir = sortDir === "asc" ? 1 : -1;
+    // Comparateur "plein nom" (nom puis prénom), insensible à la casse/accents
+    const byFullName = (a: GuestWithTable, b: GuestWithTable) =>
+      a.last_name.localeCompare(b.last_name, "fr", { sensitivity: "base" }) ||
+      a.first_name.localeCompare(b.first_name, "fr", { sensitivity: "base" });
+    arr.sort((a, b) => {
+      switch (sortBy) {
+        case "last_name":
+          return dir * byFullName(a, b);
+        case "first_name":
+          // Trie d'abord par prénom, puis par nom en cas d'égalité
+          return (
+            dir *
+            (a.first_name.localeCompare(b.first_name, "fr", { sensitivity: "base" }) ||
+              a.last_name.localeCompare(b.last_name, "fr", { sensitivity: "base" }))
+          );
+        case "table":
+          // Regroupe par nom de table ; les invités non placés restent en
+          // fin de liste quel que soit le sens, puis ordre alphabétique interne
+          const ta = a.tables?.name ?? "";
+          const tb = b.tables?.name ?? "";
+          if (ta === tb) return dir * byFullName(a, b);
+          if (ta === "") return 1;
+          if (tb === "") return -1;
+          return dir * ta.localeCompare(tb, "fr", { sensitivity: "base" });
+        case "status":
+          // Trie par présence (présents avant absents en ascendant), puis par nom
+          const c = Number(a.is_present) - Number(b.is_present);
+          return dir * (c !== 0 ? c : byFullName(a, b));
+      }
+    });
+    return arr;
+  }, [filtered, sortBy, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   // Page bornée pour éviter l'état vide quand le résultat se réduit
   // (suppression du dernier élément de la page, filtre resserré...)
   const safePage = Math.min(page, totalPages - 1);
-  const pageGuests = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+  const pageGuests = sorted.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
   // Export CSV
   const exportCSV = () => {
@@ -696,7 +781,7 @@ const executeImport = async () => {
         className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
-          <h1 className="font-serif text-3xl text-deep-black">Invités</h1>
+          <h1 className="font-serif text-3xl text-foreground">Invités</h1>
           <p className="text-sm text-muted-foreground">
             {guests.length} invité{guests.length !== 1 ? "s" : ""} au total
             ({guests.filter((g) => !g.table_id).length} non placé
@@ -797,6 +882,32 @@ const executeImport = async () => {
                   <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                 ))}
               </Select>
+              {/* Tri alphabétique : critère (Nom, Prénom, Table, Statut) */}
+              <Select
+                value={sortBy}
+                onValueChange={(v) => { setSortBy(v as SortField); setPage(0); }}
+                className="w-auto"
+                aria-label="Trier les invités par"
+              >
+                <SelectItem value="last_name">Tri : {SORT_FIELD_LABELS.last_name}</SelectItem>
+                <SelectItem value="first_name">Tri : {SORT_FIELD_LABELS.first_name}</SelectItem>
+                <SelectItem value="table">Tri : {SORT_FIELD_LABELS.table}</SelectItem>
+                <SelectItem value="status">Tri : {SORT_FIELD_LABELS.status}</SelectItem>
+              </Select>
+              {/* Sens du tri (A→Z / Z→A), bouton accessible au clavier */}
+              <Button
+                variant="outline"
+                onClick={() => { setSortDir(sortDir === "asc" ? "desc" : "asc"); setPage(0); }}
+                aria-label={`Ordre ${sortDir === "asc" ? "décroissant" : "croissant"} (actuellement ${sortDir === "asc" ? "A→Z" : "Z→A"})`}
+                className="gap-1.5"
+              >
+                {sortDir === "asc" ? (
+                  <ArrowUpNarrowWide className="size-4" aria-hidden="true" />
+                ) : (
+                  <ArrowDownWideNarrow className="size-4" aria-hidden="true" />
+                )}
+                {sortDir === "asc" ? "A→Z" : "Z→A"}
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -856,7 +967,7 @@ const executeImport = async () => {
           variants={tableContainerVariants}
           initial={prefersReducedMotion ? false : "hidden"}
           animate={prefersReducedMotion ? {} : "visible"}
-          className="overflow-x-auto rounded-xl border border-border bg-white"
+          className="overflow-x-auto rounded-xl border border-border bg-card"
         >
           <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -893,8 +1004,8 @@ const executeImport = async () => {
                   variants={tableRowVariants}
                   className={cn(
                     "border-b border-border transition-colors hover:bg-muted/30",
-                    guest.is_present && "bg-green-50/50",
-                    idx % 2 === 0 ? "bg-white" : "bg-muted/20"
+                    guest.is_present && "bg-success-bg/50",
+                    idx % 2 === 0 ? "bg-card" : "bg-muted/20"
                   )}
                 >
                   <td className="px-3 py-2.5">
@@ -947,7 +1058,7 @@ const executeImport = async () => {
                   </td>
                   <td className="px-3 py-2.5 text-center">
                     {guest.is_present ? (
-                      <Check className="mx-auto size-4 text-green-600" />
+                      <Check className="mx-auto size-4 text-success-text" />
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
@@ -1041,7 +1152,7 @@ const executeImport = async () => {
           initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.97 }}
           animate={prefersReducedMotion ? {} : { opacity: 1, scale: 1 }}
           transition={{ type: "spring" as const, stiffness: 200, damping: 24 }}
-          className="rounded-xl border-2 border-dashed border-border bg-white p-12 text-center"
+          className="rounded-xl border-2 border-dashed border-border bg-card p-12 text-center"
         >
           <motion.div
             animate={prefersReducedMotion ? {} : { y: [0, -8, 0] }}

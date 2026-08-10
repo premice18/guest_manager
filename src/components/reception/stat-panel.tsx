@@ -58,7 +58,7 @@ export function StatPanel({
   }
 
   return (
-    <div className="rounded-xl border border-border bg-white p-4">
+    <div className="rounded-xl border border-border bg-card p-4">
       <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
         Statistiques
       </h3>
@@ -81,7 +81,7 @@ export function StatPanel({
                 cy="40"
                 r="34"
                 fill="none"
-                stroke="#e2e8f0"
+                stroke="var(--border)"
                 strokeWidth="5"
               />
               <motion.circle

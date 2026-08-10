@@ -500,7 +500,7 @@ export default function BulkAddModal({
                     value={csvText}
                     onChange={(e) => setCsvText(e.target.value)}
                     placeholder={`prenom,nom,type,table\nJean,Dupont,singleton,Table 1\nMarie,Martin,couple,Table 2`}
-                    className="mb-3 bg-white"
+                    className="mb-3 bg-card"
                   />
                   <input
                     ref={fileInputRef}
@@ -531,7 +531,7 @@ export default function BulkAddModal({
           <div className="max-h-80 overflow-y-auto rounded-lg border border-border">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border bg-anthracite text-white">
+                <tr className="border-b border-border bg-muted text-foreground">
                   <th className="w-10 px-2 py-2.5 text-center text-xs font-medium">N°</th>
                   <th className="px-2 py-2.5 text-left text-xs font-medium">Prénom *</th>
                   <th className="px-2 py-2.5 text-left text-xs font-medium">Nom *</th>
@@ -553,7 +553,7 @@ export default function BulkAddModal({
                       transition={{ type: "spring" as const, stiffness: 260, damping: 24 }}
                       className={cn(
                         "border-b border-border transition-colors",
-                        idx % 2 === 0 ? "bg-white" : "bg-muted/20",
+                        idx % 2 === 0 ? "bg-card" : "bg-muted/20",
                         isCouple && "bg-gold/5"
                       )}
                     >

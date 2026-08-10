@@ -132,7 +132,7 @@ export default async function DashboardPage() {
       {/* En-tête avec titre et bouton de création */}
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-serif text-3xl tracking-tight text-deep-black">
+          <h1 className="font-serif text-3xl tracking-tight text-foreground">
             Mes événements
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
@@ -167,10 +167,10 @@ export default async function DashboardPage() {
                 href={`/event/${event.id}`}
                 className="group block"
               >
-                <Card className="h-full cursor-pointer border-l-2 border-l-transparent bg-white shadow-sm ring-1 ring-foreground/5 transition-all duration-300 group-hover:border-l-gold group-hover:-translate-y-1 group-hover:shadow-lg">
+                <Card className="h-full cursor-pointer border-l-2 border-l-transparent bg-card shadow-sm ring-1 ring-foreground/5 transition-all duration-300 group-hover:border-l-gold group-hover:-translate-y-1 group-hover:shadow-lg">
                   <CardHeader>
                     <div className="flex items-start justify-between gap-2">
-                      <CardTitle className="text-lg font-semibold text-deep-black">
+                      <CardTitle className="text-lg font-semibold text-foreground">
                         {event.name}
                       </CardTitle>
                       {/* Badge de statut (calculé côté client, fuseau de l'utilisateur) */}
@@ -198,7 +198,7 @@ export default async function DashboardPage() {
         </div>
       ) : (
         // État vide : premier événement
-        <div className="relative overflow-hidden rounded-xl border-2 border-dashed border-border bg-white p-12 text-center">
+        <div className="relative overflow-hidden rounded-xl border-2 border-dashed border-border bg-card p-12 text-center">
           {/* Éléments décoratifs en arrière-plan */}
           <div className="pointer-events-none absolute -right-10 -top-10 size-36 rounded-full bg-gradient-to-br from-gold/8 to-transparent" />
           <div className="pointer-events-none absolute -bottom-10 -left-10 size-28 rounded-full bg-gradient-to-tr from-gold/8 to-transparent" />
@@ -206,7 +206,7 @@ export default async function DashboardPage() {
             <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-gradient-to-br from-gold/20 to-gold/5 ring-1 ring-gold/20">
               <Calendar className="size-8 text-gold" />
             </div>
-            <h2 className="font-serif text-xl text-deep-black">
+            <h2 className="font-serif text-xl text-foreground">
                Bienvenue sur Guest Manager
             </h2>
             <p className="mt-2 text-muted-foreground">

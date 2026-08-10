@@ -2,11 +2,15 @@
 
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
+import { useTheme } from "@/lib/hooks/use-theme"
 
 const Toaster = ({ ...props }: ToasterProps) => {
+  // Suit le thème de l'application : les notifications restent cohérentes
+  // avec le fond de la page (et non seulement la préférence système).
+  const { theme } = useTheme()
   return (
     <Sonner
-      theme="system"
+      theme={theme}
       className="toaster group"
       icons={{
         success: (

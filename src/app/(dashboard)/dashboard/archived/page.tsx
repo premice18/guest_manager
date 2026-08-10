@@ -52,7 +52,7 @@ export default async function ArchivedEventsPage() {
           <Archive className="size-6 text-gold" />
         </div>
         <div>
-          <h1 className="font-serif text-3xl tracking-tight text-deep-black">
+          <h1 className="font-serif text-3xl tracking-tight text-foreground">
             Événements archivés
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -70,10 +70,10 @@ export default async function ArchivedEventsPage() {
               href={`/event/${event.id}`}
               className="group block"
             >
-              <Card className="h-full cursor-pointer border-l-2 border-l-transparent bg-white/80 shadow-sm ring-1 ring-foreground/5 transition-all duration-300 group-hover:border-l-gold/60 group-hover:-translate-y-1 group-hover:bg-white group-hover:shadow-lg">
+<Card className="h-full cursor-pointer border-l-2 border-l-transparent bg-card/80 shadow-sm ring-1 ring-foreground/5 transition-all duration-300 group-hover:border-l-gold/60 group-hover:-translate-y-1 group-hover:bg-card group-hover:shadow-lg">
                 <CardHeader>
                   <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="flex items-center gap-2 text-lg text-deep-black/70 group-hover:text-deep-black">
+                    <CardTitle className="flex items-center gap-2 text-lg text-foreground/70 group-hover:text-foreground">
                       <Archive className="size-4 text-muted-foreground/60" />
                       {event.name}
                     </CardTitle>
@@ -101,14 +101,14 @@ export default async function ArchivedEventsPage() {
         </div>
       ) : (
         // État vide : aucun événement archivé
-        <div className="relative overflow-hidden rounded-xl border-2 border-dashed border-border bg-white p-12 text-center">
+        <div className="relative overflow-hidden rounded-xl border-2 border-dashed border-border bg-card p-12 text-center">
           <div className="pointer-events-none absolute -right-10 -top-10 size-32 rounded-full bg-gradient-to-br from-gold/8 to-transparent" />
           <div className="pointer-events-none absolute -bottom-10 -left-10 size-28 rounded-full bg-gradient-to-tr from-gold/8 to-transparent" />
           <div className="relative">
             <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-gradient-to-br from-gold/20 to-gold/5 ring-1 ring-gold/20">
               <Archive className="size-8 text-gold" />
             </div>
-            <h2 className="font-serif text-xl text-deep-black">
+            <h2 className="font-serif text-xl text-foreground">
               Aucun événement archivé
             </h2>
             <p className="mt-2 text-muted-foreground">
