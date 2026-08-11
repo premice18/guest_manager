@@ -110,6 +110,11 @@ function DraggableGuest({ guest, compact }: { guest: Guest; compact?: boolean })
         <CircleUser className="size-3.5 shrink-0 text-muted-foreground" />
       )}
       <span className="truncate font-medium">{guest.first_name} {guest.last_name}</span>
+      {(guest.guest_count ?? 1) > 1 && (
+        <span className="shrink-0 rounded-full bg-gold px-1.5 py-0.5 text-[10px] font-semibold text-deep-black" title={`${guest.guest_count} personnes`}>
+          x{guest.guest_count}
+        </span>
+      )}
       {guest.group_name && (
         <span className="shrink-0 rounded bg-gold/10 px-1.5 py-0.5 text-[10px] text-gold">
           {guest.group_name}
@@ -284,7 +289,9 @@ export default function PlacementPage({
         setTables(
           rawTables.map((t) => ({
             ...t,
-            guest_count: rawGuests.filter((g) => g.table_id === t.id).length,
+            guest_count: rawGuests
+              .filter((g) => g.table_id === t.id)
+              .reduce((acc, g) => acc + (g.guest_count ?? 1), 0),
             placed_guests: rawGuests.filter((g) => g.table_id === t.id),
           }))
         );
@@ -308,7 +315,9 @@ export default function PlacementPage({
     setTables(
       rawTables.map((t) => ({
         ...t,
-        guest_count: rawGuests.filter((g) => g.table_id === t.id).length,
+        guest_count: rawGuests
+          .filter((g) => g.table_id === t.id)
+          .reduce((acc, g) => acc + (g.guest_count ?? 1), 0),
         placed_guests: rawGuests.filter((g) => g.table_id === t.id),
       }))
     );
@@ -323,13 +332,14 @@ export default function PlacementPage({
     );
     setTables((prev) => {
       const moved = prevGuests.find((g) => g.id === guestId);
+      const movedCount = moved?.guest_count ?? 1;
       return prev.map((t) => {
         const inTable = t.placed_guests.some((g) => g.id === guestId);
         if (inTable && tableId === null) {
           // Retrait de la table
           return {
             ...t,
-            guest_count: t.guest_count - 1,
+            guest_count: t.guest_count - movedCount,
             placed_guests: t.placed_guests.filter((g) => g.id !== guestId),
           };
         }
@@ -337,7 +347,7 @@ export default function PlacementPage({
           // Déplacement vers une autre table
           return {
             ...t,
-            guest_count: t.guest_count - 1,
+            guest_count: t.guest_count - movedCount,
             placed_guests: t.placed_guests.filter((g) => g.id !== guestId),
           };
         }
@@ -345,7 +355,7 @@ export default function PlacementPage({
           // Ajout depuis le panier non placés
           return {
             ...t,
-            guest_count: t.guest_count + 1,
+            guest_count: t.guest_count + movedCount,
             placed_guests: [...t.placed_guests, { ...moved, table_id: tableId }],
           };
         }
@@ -400,7 +410,8 @@ export default function PlacementPage({
     // Vérifie la capacité cible : le groupe entier doit tenir sur la table
     const targetTable = tableId ? tables.find((t) => t.id === tableId) : null;
     if (targetTable) {
-      const groupSize = groupMembers.length;
+      // Un membre comptant pour N personnes occupe N places
+      const groupSize = groupMembers.reduce((acc, m) => acc + (m.guest_count ?? 1), 0);
       const freeSeats = targetTable.capacity - targetTable.guest_count;
       if (groupSize > freeSeats) {
         toast.error(
@@ -421,10 +432,12 @@ export default function PlacementPage({
       const memberIds = new Set(groupMembers.map((m) => m.id));
       return prev.map((t) => {
         const membersInThisTable = t.placed_guests.filter((g) => memberIds.has(g.id));
+        // Somme des guest_count des membres retirés (un membre compte pour N)
+        const removedCount = membersInThisTable.reduce((acc, g) => acc + (g.guest_count ?? 1), 0);
         if (membersInThisTable.length > 0 && tableId !== t.id) {
           return {
             ...t,
-            guest_count: t.guest_count - membersInThisTable.length,
+            guest_count: t.guest_count - removedCount,
             placed_guests: t.placed_guests.filter((g) => !memberIds.has(g.id)),
           };
         }
@@ -434,9 +447,10 @@ export default function PlacementPage({
             .filter((g) => !existingIds.has(g.id))
             .map((g) => ({ ...g, table_id: tableId }));
           if (newMembers.length > 0) {
+            const addedCount = newMembers.reduce((acc, g) => acc + (g.guest_count ?? 1), 0);
             return {
               ...t,
-              guest_count: t.guest_count + newMembers.length,
+              guest_count: t.guest_count + addedCount,
               placed_guests: [...t.placed_guests, ...newMembers],
             };
           }
@@ -676,8 +690,10 @@ export default function PlacementPage({
     }
   }
 
-  // Nombre d'invités placés
-  const placedCount = allGuests.length - unplacedGuests.length;
+  // Total en "personnes" (somme des guest_count) pour les compteurs
+  const totalPeople = allGuests.reduce((acc, g) => acc + (g.guest_count ?? 1), 0);
+  const unplacedPeople = unplacedGuests.reduce((acc, g) => acc + (g.guest_count ?? 1), 0);
+  const placedPeople = totalPeople - unplacedPeople;
 
   return (
     <main className="relative mx-auto px-4 py-8 sm:px-6">
@@ -719,8 +735,8 @@ export default function PlacementPage({
                   <Users className="size-4 text-gold" />
                   Invités
                   <span className="ml-auto text-sm font-normal text-muted-foreground">
-                    {unplacedGuests.length} non placé{unplacedGuests.length !== 1 ? "s" : ""}
-                    {" · "}{placedCount} placé{placedCount !== 1 ? "s" : ""}
+                    {unplacedPeople} non placé{unplacedPeople !== 1 ? "s" : ""}
+                    {" · "}{placedPeople} placé{placedPeople !== 1 ? "s" : ""}
                   </span>
                 </CardTitle>
               </CardHeader>
@@ -753,7 +769,7 @@ export default function PlacementPage({
                         {group.groupName}
                       </p>
                       <span className="rounded-full bg-gold/10 px-1.5 py-0.5 text-[10px] font-medium text-gold">
-                        {group.members.length}
+                        {group.members.reduce((acc, m) => acc + (m.guest_count ?? 1), 0)}
                       </span>
                     </div>
                     <div className="space-y-1">

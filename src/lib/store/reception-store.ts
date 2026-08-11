@@ -20,6 +20,7 @@ interface PendingAction {
     age_type: Guest["age_type"];
     table_id: string | null;
     notes: string | null;
+    guest_count: number;
   };
 }
 
@@ -53,13 +54,17 @@ const emptyEvent = (): EventGuests => ({
   presentCount: 0,
 });
 
-// Construit un état événement à partir du cache, en recalculant les compteurs
+// Construit un état événement à partir du cache, en recalculant les compteurs.
+// Les effectifs utilisent la SOMME des guest_count : un invité "comptant
+// pour 5" représente 5 personnes physiques pour le décompte des présents.
 function buildEvent(guests: Record<string, Guest>): EventGuests {
   const all = Object.values(guests);
+  const people = (list: Guest[]) =>
+    list.reduce((acc, g) => acc + (g.guest_count ?? 1), 0);
   return {
     guests,
-    totalGuests: all.length,
-    presentCount: all.filter((g) => g.is_present).length,
+    totalGuests: people(all),
+    presentCount: people(all.filter((g) => g.is_present)),
   };
 }
 

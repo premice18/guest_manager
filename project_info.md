@@ -59,7 +59,7 @@ Enums : `age_category` ('adult','child','baby'), `table_shape` ('round','rectang
 | `events`      | `id`, `name`, `event_date`, `location`, `description`, `owner_id` (→ `auth.users`), `is_archived`                                        |
 | `zones`       | `id`, `event_id`, `name`                                                                                                                 |
 | `tables`      | `id`, `event_id`, `zone_id` (nullable), `name`, `capacity`, `shape` (enum), `is_locked`, `sort_order`                                    |
-| `guests`      | `id`, `event_id`, `table_id` (nullable), `first_name`, `last_name`, `group_id`, `group_name`, `category`, `age_type`, `dietary_notes`, `needs_accessibility`, `is_present`, `checked_in_at`, `notes` |
+| `guests`      | `id`, `event_id`, `table_id` (nullable), `first_name`, `last_name`, `group_id`, `group_name`, `category`, `age_type`, `dietary_notes`, `needs_accessibility`, `is_present`, `checked_in_at`, `notes`, `guest_count` (≥1, défaut 1 : un invité peut « compter pour plusieurs ») |
 | `event_staff` | `id`, `event_id`, `user_id` (→ `auth.users`), `role` ('admin' ou 'host')                                                                |
 
 **Types Supabase** : `src/types/database.types.ts` (générés manuellement, comprenant les relations FK pour les jointures typées).
@@ -71,8 +71,8 @@ Enums : `age_category` ('adult','child','baby'), `table_shape` ('round','rectang
 - **Authentification** : inscription, connexion (avec redirect sécurisé), mot de passe oublié / réinitialisation, déconnexion, profil utilisateur (3 onglets, avatar, sécurité avec indicateur de force de mot de passe).
 - **Dashboard** : liste des événements, statut calculé selon le fuseau horaire du navigateur, métriques de présence, archivage.
 - **Événement** : page d'accueil avec statistiques, configuration des zones et tables, verrouillage des tables.
-- **Invités** : liste, filtres, ajout/édition, import CSV, ajout groupé (avec contrôle de capacité des tables), groupes.
-- **Placement** : plan de salle drag & drop, respect de la capacité (individuel et groupe), tables verrouillées (aucun mouvement entrant/sortant).
+- **Invités** : liste, filtres, ajout/édition, import CSV (avec mapping de colonnes), ajout groupé (avec contrôle de capacité des tables), groupes, **nombre de personnes par invité** (`guest_count` : badge `xN` dans la liste, champ dédié dans le formulaire, colonne `Nombres` à l'export CSV, parsing à l'import).
+- **Placement** : plan de salle drag & drop, respect de la capacité (**en personnes** : somme des `guest_count`, individuellement et par groupe), tables verrouillées (aucun mouvement entrant/sortant), badge `xN` sur les cartes d'invité.
 - **Réception / check-in** : check-in individuel et groupé, mode hors-ligne avec synchronisation, walk-in, recherche.
 - **Statistiques** : graphiques Recharts (lazy-loaded).
 - **Exports** : CSV (protection anti-injection), PDF (master-book, table-sheets, table-lists, catering-summary avec head counts présents/invités) et DOCX.
@@ -143,7 +143,7 @@ src/
 3. **Phase 3 – Front-Desk** ✅
 4. **Phase 4 – Exports** ✅
 5. **Phase 5 – Audit & Corrections** ✅ (corrections A1–A10 et B1–B6 terminées)
-6. **Phase 6 – Optimisations** ⏳ (en cours : PWA ✅, refactor réception, sélecteurs uniformisés, documentation, **mode sombre/clair unifié ✅, tri alphabétique des invités ✅**)
+6. **Phase 6 – Optimisations** ⏳ (en cours : PWA ✅, refactor réception, sélecteurs uniformisés, documentation, **mode sombre/clair unifié ✅, tri alphabétique des invités ✅, invités « comptant pour plusieurs » (`guest_count`) ✅**)
 
 ---
 

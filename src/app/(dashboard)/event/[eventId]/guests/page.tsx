@@ -213,6 +213,7 @@ const [filterPresent, setFilterPresent] = useState<string>("all");
   const [formDietary, setFormDietary] = useState("");
   const [formAccessibility, setFormAccessibility] = useState(false);
   const [formNotes, setFormNotes] = useState("");
+  const [formGuestCount, setFormGuestCount] = useState(1);
   const [saving, setSaving] = useState(false);
   const [applyToGroup, setApplyToGroup] = useState(false);
 
@@ -332,6 +333,7 @@ useEffect(() => {
       setFormDietary(guest.dietary_notes ?? "");
       setFormAccessibility(guest.needs_accessibility);
       setFormNotes(guest.notes ?? "");
+      setFormGuestCount(guest.guest_count ?? 1);
     } else {
       setEditingGuest(null);
       setFormFirstName("");
@@ -344,6 +346,7 @@ useEffect(() => {
       setFormDietary("");
       setFormAccessibility(false);
       setFormNotes("");
+      setFormGuestCount(1);
     }
     setApplyToGroup(false);
     setGuestModalOpen(true);
@@ -353,6 +356,12 @@ useEffect(() => {
   const saveGuest = async () => {
     if (!formFirstName.trim() || !formLastName.trim()) {
       toast.error("Le prénom et le nom sont requis");
+      return;
+    }
+    // Validation du nombre de personnes : minimum 1, maximum 99 (cohérent
+    // avec le contrôle en base CHECK (guest_count >= 1)).
+    if (!Number.isInteger(formGuestCount) || formGuestCount < 1 || formGuestCount > 99) {
+      toast.error("Le nombre de personnes doit être compris entre 1 et 99");
       return;
     }
 
@@ -368,27 +377,36 @@ useEffect(() => {
       }
 
       if (targetTable && applyToGroup && groupId) {
+        // Déplacement de tout un groupe : la somme des guest_count du groupe
+        // doit tenir sur la table cible.
         const groupMembers = guests.filter((g) => g.group_id === groupId);
-        const alreadyOnTarget = groupMembers.filter(
-          (g) => g.table_id === targetTableId
-        ).length;
-        const placedOnTarget = guests.filter(
-          (g) => g.table_id === targetTableId
-        ).length;
+        const groupNeeded = groupMembers.reduce(
+          (acc, g) => acc + (g.id === editingGuest?.id ? formGuestCount : g.guest_count ?? 1),
+          0
+        );
+        const alreadyOnTarget = groupMembers
+          .filter((g) => g.table_id === targetTableId)
+          .reduce((acc, g) => acc + (g.guest_count ?? 1), 0);
+        const placedOnTarget = guests
+          .filter((g) => g.table_id === targetTableId)
+          .reduce((acc, g) => acc + (g.guest_count ?? 1), 0);
         const free = targetTable.capacity - placedOnTarget;
-        const needed = groupMembers.length - alreadyOnTarget;
+        const needed = groupNeeded - alreadyOnTarget;
         if (needed > free) {
           toast.error(
-            `⚠️ Le groupe (${groupMembers.length} pers.) ne tient pas sur "${targetTable.name}" (${free} place${free > 1 ? "s" : ""} libre${free > 1 ? "s" : ""}).`
+            `⚠️ Le groupe (${groupNeeded} pers.) ne tient pas sur "${targetTable.name}" (${free} place${free > 1 ? "s" : ""} libre${free > 1 ? "s" : ""}).`
           );
           return;
         }
       } else if (targetTable) {
         const staying = editingGuest?.table_id === targetTableId;
         const available = getTableAvailable(targetTableId);
-        if (!staying && available < 1) {
+        const neededSeats = staying
+          ? formGuestCount - (editingGuest?.guest_count ?? 1)
+          : formGuestCount;
+        if (neededSeats > available) {
           toast.error(
-            `⚠️ La table "${targetTable.name}" est complète (${targetTable.capacity} places).`
+            `⚠️ La table "${targetTable.name}" n'a pas assez de places (${Math.max(0, available)} disponible${available !== 1 ? "s" : ""}, besoin de ${neededSeats}).`
           );
           return;
         }
@@ -409,6 +427,7 @@ useEffect(() => {
         dietary_notes: formDietary.trim() || null,
         needs_accessibility: formAccessibility,
         notes: formNotes.trim() || null,
+        guest_count: formGuestCount,
       };
 
       if (editingGuest) {
@@ -530,12 +549,14 @@ useEffect(() => {
     }
   };
 
-// Nombre d'invités placés par table (utilisé pour la validation de capacité dans le bulk add)
+// Nombre de personnes placées par table (somme des guest_count) — utilisé
+// pour la validation de capacité dans le bulk add. Un invité comptant pour
+// plusieurs personnes pèse son poids réel, pas 1.
   const tableCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const g of guests) {
       if (g.table_id) {
-        counts[g.table_id] = (counts[g.table_id] ?? 0) + 1;
+        counts[g.table_id] = (counts[g.table_id] ?? 0) + (g.guest_count ?? 1);
       }
     }
     return counts;
@@ -615,12 +636,12 @@ if (filterPresent === "absent" && g.is_present) return false;
   const exportCSV = () => {
     const headers = [
       "Civilité", "Prénom", "Nom", "Catégorie", "Âge",
-      "Groupe", "Table", "Régime", "Accessibilité",
+      "Nombres", "Groupe", "Table", "Régime", "Accessibilité",
       "Présent", "Arrivée", "Notes",
     ];
     const rows = guests.map((g) => [
       "", g.first_name, g.last_name, g.category ?? "", AGE_LABELS[g.age_type] ?? g.age_type,
-      g.group_name ?? "", g.tables?.name ?? "", g.dietary_notes ?? "",
+      String(g.guest_count ?? 1), g.group_name ?? "", g.tables?.name ?? "", g.dietary_notes ?? "",
       g.needs_accessibility ? "Oui" : "Non",
       g.is_present ? "Oui" : "Non", g.checked_in_at ?? "", g.notes ?? "",
     ]);
@@ -672,6 +693,7 @@ if (filterPresent === "absent" && g.is_present) return false;
       else if (hl.includes("table")) guess[h] = "table_id";
       else if (hl.includes("régime") || hl.includes("aliment") || hl.includes("diet")) guess[h] = "dietary_notes";
       else if (hl.includes("accessib")) guess[h] = "needs_accessibility";
+      else if (hl.includes("nombre") || hl.includes("nombres") || hl.includes("count")) guess[h] = "guest_count";
     }
     setColumnMapping(guess);
     setImportModalOpen(true);
@@ -722,6 +744,11 @@ const executeImport = async () => {
           group_name: get("group_name") || null,
           dietary_notes: get("dietary_notes") || null,
           needs_accessibility: get("needs_accessibility") ? toBool(get("needs_accessibility")) : false,
+          // Nombre de personnes : valeur >= 1, défaut 1 (les valeurs invalides
+          // sont ramenées à 1 pour ne pas échouer l'import).
+          guest_count: get("guest_count")
+            ? Math.max(1, Math.min(99, parseInt(get("guest_count"), 10) || 1))
+            : 1,
           notes: get("notes") || null,
         });
       } catch {
@@ -784,8 +811,10 @@ const executeImport = async () => {
           <h1 className="font-serif text-3xl text-foreground">Invités</h1>
           <p className="text-sm text-muted-foreground">
             {guests.length} invité{guests.length !== 1 ? "s" : ""} au total
-            ({guests.filter((g) => !g.table_id).length} non placé
-            {guests.filter((g) => !g.table_id).length !== 1 ? "s" : ""})
+            ({guests.reduce((acc, g) => acc + (g.guest_count ?? 1), 0)} personne
+            {guests.reduce((acc, g) => acc + (g.guest_count ?? 1), 0) !== 1 ? "s" : ""}) —{" "}
+            {guests.filter((g) => !g.table_id).reduce((acc, g) => acc + (g.guest_count ?? 1), 0)} non placé
+            {guests.filter((g) => !g.table_id).reduce((acc, g) => acc + (g.guest_count ?? 1), 0) !== 1 ? "s" : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -1021,7 +1050,17 @@ const executeImport = async () => {
                       className="size-4 rounded border-border text-gold focus:ring-2 focus:ring-gold"
                     />
                   </td>
-                  <td className="px-3 py-2.5 font-medium">{guest.last_name}</td>
+                  <td className="px-3 py-2.5 font-medium">
+                    {guest.last_name}
+                    {(guest.guest_count ?? 1) > 1 && (
+                      <span
+                        className="ml-1.5 inline-flex items-center rounded-full bg-gold px-1.5 py-0.5 text-[10px] font-semibold text-deep-black"
+                        title={`${guest.guest_count} personnes`}
+                      >
+                        x{guest.guest_count}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-2.5">{guest.first_name}</td>
                   <td className="px-3 py-2.5 hidden md:table-cell text-muted-foreground">
                     {guest.category ?? "—"}
@@ -1235,6 +1274,29 @@ initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, y: 10 }}
                   className="focus-visible:ring-2 focus-visible:ring-gold"
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="guest-count">
+                  Nombre de personnes (1 pour un invité seul, &gt;1 pour un groupe)
+                </Label>
+                <Input
+                  id="guest-count"
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={formGuestCount}
+                  onChange={(e) =>
+                    setFormGuestCount(Math.max(1, parseInt(e.target.value) || 1))
+                  }
+                  placeholder="1"
+                  className="focus-visible:ring-2 focus-visible:ring-gold"
+                />
+                {formGuestCount > 1 && (
+                  <p className="text-xs text-gold" role="note">
+                    Cet invité représentera {formGuestCount} personne
+                    {formGuestCount > 1 ? "s" : ""} dans le plan de table.
+                  </p>
+                )}
+              </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="guest-dietary">Notes alimentaires</Label>
                 <Textarea
@@ -1385,6 +1447,7 @@ initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, y: 10 }}
                       <SelectItem value="table_id">Table</SelectItem>
                       <SelectItem value="dietary_notes">Notes alimentaires</SelectItem>
                       <SelectItem value="needs_accessibility">Accessibilité</SelectItem>
+                      <SelectItem value="guest_count">Nombre de personnes</SelectItem>
                       <SelectItem value="notes">Notes</SelectItem>
                     </Select>
                   </div>
