@@ -410,6 +410,7 @@ export default function ReceptionPage({
             age_type: walkinPayload.age_type,
             table_id: walkinPayload.table_id,
             notes: walkinPayload.notes,
+            guest_count: 1,
           },
         });
         toast.success(

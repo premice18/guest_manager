@@ -152,6 +152,7 @@ export type Database = {
           group_id: string | null;
           group_name: string | null;
           notes: string | null;
+          guest_count: number;
           created_at: string;
           updated_at: string;
         };
@@ -161,6 +162,7 @@ export type Database = {
           table_id?: string | null;
           first_name: string;
           last_name: string;
+          guest_count?: number;
           category?: string | null;
           age_type?: "adult" | "child" | "baby";
           dietary_notes?: string | null;
@@ -188,6 +190,7 @@ export type Database = {
           group_id?: string | null;
           group_name?: string | null;
           notes?: string | null;
+          guest_count?: number;
           created_at?: string;
           updated_at?: string;
         };

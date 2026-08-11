@@ -38,6 +38,7 @@ interface BulkAddRow {
   type: "singleton" | "couple";
   tableId: string;
   coupleKey: string | null; // clé partagée par les 2 membres d'un couple
+  guestCount: number; // nombre de personnes que représente la ligne (>= 1)
 }
 
 interface BulkAddModalProps {
@@ -62,6 +63,7 @@ function createEmptyRow(type: "singleton" | "couple" = "singleton"): BulkAddRow 
     lastName: "",
     type,
     tableId: "",
+    guestCount: 1,
     // Un couple partage une même clé pour relier explicitement ses 2 membres
     coupleKey: type === "couple" ? localId() : null,
   };
@@ -126,13 +128,17 @@ export default function BulkAddModal({
       { ...row, id: localId(), firstName: row.firstName, lastName: row.lastName, coupleKey: null },
     ]);
   };
-
   // Met à jour un champ d'une ligne
   const updateRow = (id: string, field: keyof BulkAddRow, value: string) => {
     setRows((prev) => {
       const index = prev.findIndex((r) => r.id === id);
       if (index === -1) return prev;
-      const updated = { ...prev[index], [field]: value };
+      let parsed = value as unknown;
+      // Le nombre de personnes est stocké en entier, borné à [1, 99]
+      if (field === "guestCount") {
+        parsed = Math.max(1, Math.min(99, parseInt(value, 10) || 1));
+      }
+      const updated = { ...prev[index], [field]: parsed };
 
       // Si on change le type en "couple", on ajoute automatiquement une ligne partenaire
       if (field === "type" && value === "couple" && prev[index].type !== "couple") {
@@ -186,6 +192,10 @@ export default function BulkAddModal({
     for (const row of rows) {
       if (!row.firstName.trim()) errors.push(`Ligne : Prénom manquant`);
       if (!row.lastName.trim()) errors.push(`Ligne : Nom manquant`);
+      // Le nombre de personnes doit rester dans [1, 99] (cohérent avec la base)
+      if (!Number.isInteger(row.guestCount) || row.guestCount < 1 || row.guestCount > 99) {
+        errors.push(`Ligne : nombre de personnes invalide (1 à 99)`);
+      }
     }
 
     // Vérifie que chaque couple a 2 membres
@@ -195,13 +205,13 @@ export default function BulkAddModal({
       }
     }
 
-    // Vérifie la capacité des tables sélectionnées
+    // Vérifie la capacité des tables sélectionnées (somme des guest_count :
+    // un invité "comptant pour 5" occupe 5 places).
     const occupancy: Record<string, number> = {};
     for (const row of rows) {
       if (!row.firstName.trim() || !row.lastName.trim()) continue;
       if (!row.tableId) continue;
-      // Compte les invités déjà placés dans cette table + ceux saisis dans le modal
-      occupancy[row.tableId] = (occupancy[row.tableId] ?? 0) + 1;
+      occupancy[row.tableId] = (occupancy[row.tableId] ?? 0) + (row.guestCount ?? 1);
     }
     for (const [tableId, count] of Object.entries(occupancy)) {
       const table = tables.find((t) => t.id === tableId);
@@ -245,6 +255,7 @@ export default function BulkAddModal({
         group_id: string | null;
         group_name: string | null;
         age_type: "adult" | "child" | "baby";
+        guest_count: number;
       }> = [];
 
       // Traite les couples
@@ -266,6 +277,7 @@ export default function BulkAddModal({
             group_id: groupId,
             group_name: `Couple ${lastName}`,
             age_type: "adult",
+            guest_count: member.guestCount || 1,
           });
         }
       }
@@ -281,6 +293,7 @@ export default function BulkAddModal({
           group_id: null,
           group_name: null,
           age_type: "adult",
+          guest_count: row.guestCount || 1,
         });
       }
 
@@ -347,6 +360,9 @@ export default function BulkAddModal({
       (h) => h.includes("type") || h.includes("couple") || h.includes("statut")
     );
     const tableIdx = headers.findIndex((h) => h.includes("table"));
+    const countIdx = headers.findIndex(
+      (h) => h.includes("nombre") || h.includes("nombres") || h.includes("count")
+    );
 
     if (firstNameIdx < 0 || lastNameIdx < 0) {
       toast.error("Le CSV doit contenir les colonnes 'prenom' et 'nom'");
@@ -367,6 +383,11 @@ export default function BulkAddModal({
           : "singleton";
       const tableName = tableIdx >= 0 ? (row[tableIdx] ?? "") : "";
       const tableId = tableName ? tableMap.get(tableName.toLowerCase()) ?? "" : "";
+      // Nombre de personnes : borne à [1, 99], défaut 1 si absent/invalide
+      const rawCount = countIdx >= 0 ? parseInt(row[countIdx] ?? "", 10) : NaN;
+      const guestCount = Number.isInteger(rawCount)
+        ? Math.max(1, Math.min(99, rawCount))
+        : 1;
 
       let coupleKey: string | null = null;
       if (type === "couple") {
@@ -386,6 +407,7 @@ export default function BulkAddModal({
         type,
         tableId,
         coupleKey,
+        guestCount,
       });
     }
 
@@ -535,6 +557,7 @@ export default function BulkAddModal({
                   <th className="w-10 px-2 py-2.5 text-center text-xs font-medium">N°</th>
                   <th className="px-2 py-2.5 text-left text-xs font-medium">Prénom *</th>
                   <th className="px-2 py-2.5 text-left text-xs font-medium">Nom *</th>
+                  <th className="w-16 px-2 py-2.5 text-center text-xs font-medium" title="Nombre de personnes (1 par défaut)">Nbre</th>
                   <th className="w-24 px-2 py-2.5 text-left text-xs font-medium">Type</th>
                   <th className="px-2 py-2.5 text-left text-xs font-medium">Table</th>
                   <th className="w-20 px-2 py-2.5 text-center text-xs font-medium">Actions</th>
@@ -577,6 +600,17 @@ export default function BulkAddModal({
                           onChange={(e) => updateRow(row.id, "lastName", e.target.value)}
                           placeholder="Nom"
                           className="h-9 text-xs focus-visible:ring-2 focus-visible:ring-gold"
+                        />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={99}
+                          value={row.guestCount}
+                          onChange={(e) => updateRow(row.id, "guestCount", e.target.value)}
+                          title="Nombre de personnes (1 pour un seul invité)"
+                          className="h-9 w-16 text-center text-xs focus-visible:ring-2 focus-visible:ring-gold"
                         />
                       </td>
                       <td className="px-2 py-1.5">
