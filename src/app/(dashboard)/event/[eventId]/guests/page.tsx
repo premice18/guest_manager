@@ -34,13 +34,18 @@ import {
   Table as TableIcon,
   X,
   Check,
-  CircleUser,
-  Baby,
   UserPlus,
+  Heart,
   ArrowUpNarrowWide,
   ArrowDownWideNarrow,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  guestDisplayName,
+  guestPersonCount,
+  getCoupleGroups,
+  getCouplePersonCount,
+} from "@/lib/guest-helpers";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 type Guest = Database["public"]["Tables"]["guests"]["Row"];
@@ -60,12 +65,6 @@ const SORT_FIELD_LABELS: Record<SortField, string> = {
   first_name: "Prénom",
   table: "Table",
   status: "Statut",
-};
-
-const AGE_LABELS: Record<string, string> = {
-  adult: "Adulte",
-  child: "Enfant",
-  baby: "Bébé",
 };
 
 // Analyse uneparse CSV ligne respectant les guillemets (permise des virgules
@@ -96,14 +95,6 @@ function parseCsvLine(line: string, delimiter: string): string[] {
   }
   cells.push(current.trim());
   return cells;
-}
-
-// Normalise une valeur de tranche d'âge française vers l'enum de la base
-function normalizeAge(value: string): "adult" | "child" | "baby" {
-  const v = value.trim().toLowerCase();
-  if (["child", "enfant", "kids", "enfants"].includes(v)) return "child";
-  if (["baby", "bébé", "bebe", "nourrisson"].includes(v)) return "baby";
-  return "adult";
 }
 
 // Interprète une valeur booléenne (accessibilité) : Oui/Non/1/0/true/false...
@@ -155,7 +146,6 @@ export default function GuestsPage({
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 const [filterPresent, setFilterPresent] = useState<string>("all");
-  const [filterAge, setFilterAge] = useState<string>("all");
   const [filterTableId, setFilterTableId] = useState("all");
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 50;
@@ -206,16 +196,33 @@ const [filterPresent, setFilterPresent] = useState<string>("all");
   const [formFirstName, setFormFirstName] = useState("");
   const [formLastName, setFormLastName] = useState("");
   const [formCategory, setFormCategory] = useState("");
-  const [formAgeType, setFormAgeType] = useState<"adult" | "child" | "baby">("adult");
   const [formTableId, setFormTableId] = useState("none");
   const [formGroupName, setFormGroupName] = useState("");
   const [formGroupId, setFormGroupId] = useState("");
-  const [formDietary, setFormDietary] = useState("");
   const [formAccessibility, setFormAccessibility] = useState(false);
   const [formNotes, setFormNotes] = useState("");
   const [formGuestCount, setFormGuestCount] = useState(1);
   const [saving, setSaving] = useState(false);
   const [applyToGroup, setApplyToGroup] = useState(false);
+
+  // État du modal couple : création ou édition d'un couple (un seul champ
+  // « Nom du couple », les 2 conjoints sont générés automatiquement).
+  const [coupleModalOpen, setCoupleModalOpen] = useState(false);
+  const [editingCouple, setEditingCouple] = useState<{
+    groupId: string;
+    label: string;
+  } | null>(null);
+  const [formCoupleName, setFormCoupleName] = useState("");
+  const [formCoupleTableId, setFormCoupleTableId] = useState("none");
+  const [formCoupleCategory, setFormCoupleCategory] = useState("");
+  const [coupleSaving, setCoupleSaving] = useState(false);
+
+  // Confirmation de suppression d'un couple complet (les 2 conjoints)
+  const [deleteCouple, setDeleteCouple] = useState<{
+    label: string;
+    memberIds: string[];
+    personCount: number;
+  } | null>(null);
 
   // État du modal groupe
   const [groupModalOpen, setGroupModalOpen] = useState(false);
@@ -326,11 +333,9 @@ useEffect(() => {
       setFormFirstName(guest.first_name);
       setFormLastName(guest.last_name);
       setFormCategory(guest.category ?? "");
-      setFormAgeType(guest.age_type);
       setFormTableId(guest.table_id ?? "none");
       setFormGroupName(guest.group_name ?? "");
       setFormGroupId(guest.group_id ?? "");
-      setFormDietary(guest.dietary_notes ?? "");
       setFormAccessibility(guest.needs_accessibility);
       setFormNotes(guest.notes ?? "");
       setFormGuestCount(guest.guest_count ?? 1);
@@ -339,11 +344,9 @@ useEffect(() => {
       setFormFirstName("");
       setFormLastName("");
       setFormCategory("");
-      setFormAgeType("adult");
       setFormTableId("none");
       setFormGroupName("");
       setFormGroupId("");
-      setFormDietary("");
       setFormAccessibility(false);
       setFormNotes("");
       setFormGuestCount(1);
@@ -354,8 +357,8 @@ useEffect(() => {
 
   // Sauvegarde un invité
   const saveGuest = async () => {
-    if (!formFirstName.trim() || !formLastName.trim()) {
-      toast.error("Le prénom et le nom sont requis");
+    if (!formFirstName.trim() && !formLastName.trim()) {
+      toast.error("Renseignez au moins le prénom ou le nom");
       return;
     }
     // Validation du nombre de personnes : minimum 1, maximum 99 (cohérent
@@ -420,11 +423,14 @@ useEffect(() => {
         first_name: formFirstName.trim(),
         last_name: formLastName.trim(),
         category: formCategory.trim() || null,
-        age_type: formAgeType,
+        // La tranche d'âge et les notes alimentaires sont masquées dans
+        // l'interface mais conservées en base : on préserve l'existant
+        // (édition) et on applique les valeurs par défaut (création).
+        age_type: editingGuest?.age_type ?? "adult",
         table_id: formTableId === "none" ? null : formTableId,
         group_name: formGroupName.trim() || null,
         group_id: groupId,
-        dietary_notes: formDietary.trim() || null,
+        dietary_notes: editingGuest?.dietary_notes ?? null,
         needs_accessibility: formAccessibility,
         notes: formNotes.trim() || null,
         guest_count: formGuestCount,
@@ -495,6 +501,155 @@ useEffect(() => {
     } catch {
       toast.error("Erreur lors de la suppression");
       setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Ouvre le modal couple (création ou édition). En édition, les champs sont
+  // pré-remplis depuis le premier conjoint du groupe.
+  const openCoupleModal = (couple?: { groupId: string; label: string }) => {
+    setEditingCouple(couple ?? null);
+    if (couple) {
+      const primary = guests.find((g) => g.group_id === couple.groupId);
+      setFormCoupleName(couple.label);
+      setFormCoupleTableId(primary?.table_id ?? "none");
+      setFormCoupleCategory(primary?.category ?? "");
+    } else {
+      setFormCoupleName("");
+      setFormCoupleTableId("none");
+      setFormCoupleCategory("");
+    }
+    setCoupleModalOpen(true);
+  };
+
+  // Vérifie qu'une table cible peut recevoir un couple : besoin de 2 places
+  // nettes (les membres déjà placés sur la table sont soustraits).
+  const coupleFitsTable = (tableId: string): boolean => {
+    const table = tables.find((t) => t.id === tableId);
+    if (!table) return true;
+    const editingGroupId = editingCouple?.groupId;
+    const alreadyOnTarget = editingGroupId
+      ? guests
+          .filter(
+            (g) => g.group_id === editingGroupId && g.table_id === tableId
+          )
+          .reduce((acc, g) => acc + (g.guest_count ?? 1), 0)
+      : 0;
+    const placedOnTarget = guests
+      .filter(
+        (g) =>
+          g.table_id === tableId && !(editingGroupId && g.group_id === editingGroupId)
+      )
+      .reduce((acc, g) => acc + (g.guest_count ?? 1), 0);
+    const free = table.capacity - placedOnTarget;
+    return 2 - alreadyOnTarget <= free;
+  };
+
+  // Enregistre un couple : crée 2 conjoints (nom générique, group_id partagé)
+  // ou met à jour les deux membres lors d'une édition.
+  const saveCouple = async () => {
+    const name = formCoupleName.trim();
+    if (!name) {
+      toast.error("Le nom du couple est requis");
+      return;
+    }
+    const targetTableId = formCoupleTableId === "none" ? null : formCoupleTableId;
+
+    // Contrôle de capacité + verrou avant écriture (comme pour les invités)
+    if (targetTableId) {
+      const table = tables.find((t) => t.id === targetTableId);
+      if (!table) return;
+      const alreadyThere = editingCouple
+        ? guests.some(
+            (g) =>
+              g.group_id === editingCouple.groupId &&
+              g.table_id === table.id
+          )
+        : false;
+      if (table.is_locked && !alreadyThere) {
+        toast.error(`🔒 La table "${table.name}" est verrouillée.`);
+        return;
+      }
+      if (!coupleFitsTable(targetTableId)) {
+        toast.error(
+          `⚠️ La table "${table.name}" n'a pas assez de places pour ce couple (2 places).`
+        );
+        return;
+      }
+    }
+
+    setCoupleSaving(true);
+    try {
+      if (editingCouple) {
+        // Édition : le nom du couple & la table s'appliquent aux deux conjoints
+        const { error } = await supabase
+          .from("guests")
+          .update({
+            first_name: "",
+            last_name: name,
+            group_name: name,
+            table_id: targetTableId,
+            category: formCoupleCategory.trim() || null,
+          })
+          .eq("group_id", editingCouple.groupId)
+          .eq("event_id", eventId);
+        if (error) {
+          toast.error(error.message);
+          return;
+        }
+        toast.success(`Couple « ${name} » mis à jour`);
+      } else {
+        // Création : insère deux lignes partageant group_id/group_name
+        const groupId = nanoid();
+        const row: Database["public"]["Tables"]["guests"]["Insert"] = {
+          event_id: eventId,
+          first_name: "",
+          last_name: name,
+          group_id: groupId,
+          group_name: name,
+          age_type: "adult",
+          guest_count: 1,
+          table_id: targetTableId,
+          category: formCoupleCategory.trim() || null,
+        };
+        const { error } = await supabase.from("guests").insert([row, { ...row }]);
+        if (error) {
+          toast.error(error.message);
+          return;
+        }
+        toast.success(`Couple « ${name} » ajouté`);
+      }
+      setCoupleModalOpen(false);
+      loadData();
+    } catch {
+      toast.error("Erreur lors de l'enregistrement du couple");
+    } finally {
+      setCoupleSaving(false);
+    }
+  };
+
+  // Supprime les deux conjoints d'un couple
+  const confirmDeleteCouple = async () => {
+    if (!deleteCouple) return;
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from("guests")
+        .delete()
+        .in("id", deleteCouple.memberIds)
+        .eq("event_id", eventId);
+      if (error) {
+        toast.error(error.message);
+        setDeleteCouple(null);
+        return;
+      }
+      toast.success("Couple supprimé");
+      setDeleteCouple(null);
+      loadData();
+    } catch {
+      toast.error("Erreur lors de la suppression");
+      setDeleteCouple(null);
     } finally {
       setDeleting(false);
     }
@@ -574,15 +729,35 @@ useEffect(() => {
   // Calcule la capacité restante d'une table
   const getTableAvailable = (tableId: string) => tableAvailable[tableId] ?? 0;
 
+  // Groupes « couple » : 2+ membres anonymes liés par un group_id, affichés
+  // en une seule ligne « Couple X (x2) » dans la liste.
+  const coupleGroups = useMemo(() => getCoupleGroups(guests), [guests]);
+  const coupleGroupIds = useMemo(
+    () => new Set(coupleGroups.keys()),
+    [coupleGroups]
+  );
+  // Le premier conjoint de chaque couple représente la ligne affichée
+  const couplePrimaryIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const members of coupleGroups.values()) ids.add(members[0].id);
+    return ids;
+  }, [coupleGroups]);
+
   // Filtres
   const filtered = guests.filter((g) => {
+    // Les conjoints secondaires ne forment pas une ligne à part entière
+    if (
+      coupleGroupIds.has(g.group_id ?? "") &&
+      !couplePrimaryIds.has(g.id)
+    ) {
+      return false;
+    }
     const q = search.toLowerCase();
     if (q && !`${g.first_name} ${g.last_name} ${g.group_name ?? ""} ${g.category ?? ""}`
       .toLowerCase()
       .includes(q)) return false;
     if (filterPresent === "present" && !g.is_present) return false;
 if (filterPresent === "absent" && g.is_present) return false;
-    if (filterAge !== "all" && g.age_type !== filterAge) return false;
     if (filterTableId !== "all" && g.table_id !== filterTableId) return false;
     return true;
   });
@@ -626,25 +801,64 @@ if (filterPresent === "absent" && g.is_present) return false;
     return arr;
   }, [filtered, sortBy, sortDir]);
 
-  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  // Construit les lignes affichées : un couple = une seule ligne « (xN) »
+  const displayRows = useMemo(
+    () =>
+      sorted.map((g) => {
+        const members = g.group_id ? coupleGroups.get(g.group_id) : undefined;
+        if (members) {
+          return {
+            kind: "couple" as const,
+            key: g.group_id,
+            members,
+            primary: g,
+            label: g.group_name ?? g.last_name,
+            count: getCouplePersonCount(members),
+          };
+        }
+        return { kind: "solo" as const, key: g.id, guest: g };
+      }),
+    [sorted, coupleGroups]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(displayRows.length / PAGE_SIZE));
   // Page bornée pour éviter l'état vide quand le résultat se réduit
   // (suppression du dernier élément de la page, filtre resserré...)
   const safePage = Math.min(page, totalPages - 1);
-  const pageGuests = sorted.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+  const pageRows = displayRows.slice(
+    safePage * PAGE_SIZE,
+    (safePage + 1) * PAGE_SIZE
+  );
 
   // Export CSV
   const exportCSV = () => {
     const headers = [
-      "Civilité", "Prénom", "Nom", "Catégorie", "Âge",
-      "Nombres", "Groupe", "Table", "Régime", "Accessibilité",
+      "Civilité", "Prénom", "Nom", "Catégorie", "Nombres",
+      "Groupe", "Table", "Accessibilité",
       "Présent", "Arrivée", "Notes",
     ];
-    const rows = guests.map((g) => [
-      "", g.first_name, g.last_name, g.category ?? "", AGE_LABELS[g.age_type] ?? g.age_type,
-      String(g.guest_count ?? 1), g.group_name ?? "", g.tables?.name ?? "", g.dietary_notes ?? "",
-      g.needs_accessibility ? "Oui" : "Non",
-      g.is_present ? "Oui" : "Non", g.checked_in_at ?? "", g.notes ?? "",
-    ]);
+    // Les colonnes « Âge » et « Régime » (age_type / dietary_notes) sont
+    // masquées ; les couples tiennent sur UNE ligne (nom du couple, 2 pers.).
+    const rows = guests
+      .filter(
+        (g) =>
+          !coupleGroupIds.has(g.group_id ?? "") ||
+          couplePrimaryIds.has(g.id)
+      )
+      .map((g) => {
+        const members = g.group_id ? coupleGroups.get(g.group_id) : undefined;
+        const personCount = members
+          ? getCouplePersonCount(members)
+          : guestPersonCount(g);
+        const firstName = members ? "" : g.first_name;
+        const lastName = members ? g.group_name ?? g.last_name : g.last_name;
+        return [
+          "", firstName, lastName, g.category ?? "", String(personCount),
+          g.group_name ?? "", g.tables?.name ?? "",
+          g.needs_accessibility ? "Oui" : "Non",
+          g.is_present ? "Oui" : "Non", g.checked_in_at ?? "", g.notes ?? "",
+        ];
+      });
     // Échappe chaque cellule selon la norme CSV : doublant les guillemets
     // internes et encadrant systématiquement par des guillemets. Évite
     // l'injection de formule (=, +, -) via des valeurs commençant par '='.
@@ -688,10 +902,8 @@ if (filterPresent === "absent" && g.is_present) return false;
       if (hl.includes("prénom") || hl.includes("first")) guess[h] = "first_name";
       else if (hl.includes("nom") || hl.includes("last") || hl.includes("name")) guess[h] = "last_name";
       else if (hl.includes("catégorie") || hl.includes("categorie") || hl.includes("category")) guess[h] = "category";
-      else if (hl.includes("âge") || hl.includes("age")) guess[h] = "age_type";
       else if (hl.includes("groupe") || hl.includes("group")) guess[h] = "group_name";
       else if (hl.includes("table")) guess[h] = "table_id";
-      else if (hl.includes("régime") || hl.includes("aliment") || hl.includes("diet")) guess[h] = "dietary_notes";
       else if (hl.includes("accessib")) guess[h] = "needs_accessibility";
       else if (hl.includes("nombre") || hl.includes("nombres") || hl.includes("count")) guess[h] = "guest_count";
     }
@@ -728,7 +940,8 @@ const executeImport = async () => {
 
         const firstName = get("first_name");
         const lastName = get("last_name");
-        if (!firstName || !lastName) {
+        // Au moins un des deux (prénom OU nom) est requis
+        if (!firstName && !lastName) {
           errors++;
           continue;
         }
@@ -739,10 +952,11 @@ const executeImport = async () => {
           first_name: firstName,
           last_name: lastName,
           category: get("category") || null,
-          age_type: get("age_type") ? normalizeAge(get("age_type")) : "adult",
+          // age_type / dietary_notes : valeurs par défaut (champs masqués)
+          age_type: "adult",
           table_id: tableName ? tableIdByName.get(tableName.toLowerCase()) ?? null : null,
           group_name: get("group_name") || null,
-          dietary_notes: get("dietary_notes") || null,
+          dietary_notes: null,
           needs_accessibility: get("needs_accessibility") ? toBool(get("needs_accessibility")) : false,
           // Nombre de personnes : valeur >= 1, défaut 1 (les valeurs invalides
           // sont ramenées à 1 pour ne pas échouer l'import).
@@ -854,6 +1068,19 @@ const executeImport = async () => {
           )}
           {canManage && (
             <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => openCoupleModal()}
+                className="gap-1.5 text-gold border-gold/30 hover:bg-gold/5"
+              >
+                <Heart className="size-4" />
+                Ajouter un couple
+              </Button>
+            </motion.div>
+          )}
+          {canManage && (
+            <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
               <Button size="sm" onClick={() => openGuestModal()}>
                 <Plus className="mr-1.5 size-4" />
                 Ajouter un invité
@@ -889,16 +1116,6 @@ const executeImport = async () => {
                 <SelectItem value="all">Tous les statuts</SelectItem>
                 <SelectItem value="present">Présents</SelectItem>
                 <SelectItem value="absent">Absents</SelectItem>
-              </Select>
-              <Select
-                value={filterAge}
-                onValueChange={(v) => { setFilterAge(v); setPage(0); }}
-                className="w-auto"
-              >
-                <SelectItem value="all">Tous les âges</SelectItem>
-                <SelectItem value="adult">Adultes</SelectItem>
-                <SelectItem value="child">Enfants</SelectItem>
-                <SelectItem value="baby">Bébés</SelectItem>
               </Select>
               <Select
                 value={filterTableId}
@@ -991,7 +1208,7 @@ const executeImport = async () => {
       </AnimatePresence>
 
       {/* Tableau des invités */}
-      {pageGuests.length > 0 ? (
+      {pageRows.length > 0 ? (
         <motion.div
           variants={tableContainerVariants}
           initial={prefersReducedMotion ? false : "hidden"}
@@ -1007,19 +1224,32 @@ const executeImport = async () => {
                     type="checkbox"
                     onChange={(e) => {
                       if (e.target.checked) {
-                        setSelectedGuestIds(new Set(pageGuests.map((g) => g.id)));
+                        const ids = new Set<string>();
+                        for (const row of pageRows) {
+                          if (row.kind === "couple") {
+                            row.members.forEach((m) => ids.add(m.id));
+                          } else {
+                            ids.add(row.guest.id);
+                          }
+                        }
+                        setSelectedGuestIds(ids);
                       } else {
                         setSelectedGuestIds(new Set());
                       }
                     }}
-                    checked={pageGuests.every((g) => selectedGuestIds.has(g.id))}
+                    checked={
+                      pageRows.length > 0 &&
+                      pageRows.every((row) =>
+                        row.kind === "couple"
+                          ? row.members.every((m) => selectedGuestIds.has(m.id))
+                          : selectedGuestIds.has(row.guest.id)
+                      )
+                    }
                     className="size-4 rounded border-border text-gold focus:ring-2 focus:ring-gold"
                   />
                 </th>
-                <th className="px-3 py-3 text-left font-medium">Nom</th>
-                <th className="px-3 py-3 text-left font-medium">Prénom</th>
+                <th className="px-3 py-3 text-left font-medium">Nom / Prénom</th>
                 <th className="px-3 py-3 text-left font-medium hidden md:table-cell">Catégorie</th>
-                <th className="px-3 py-3 text-left font-medium hidden md:table-cell">Âge</th>
                 <th className="px-3 py-3 text-left font-medium hidden lg:table-cell">Groupe</th>
                 <th className="px-3 py-3 text-left font-medium">Table</th>
                 <th className="px-3 py-3 text-center font-medium">Arrivé</th>
@@ -1027,125 +1257,151 @@ const executeImport = async () => {
               </tr>
             </thead>
             <tbody>
-              {pageGuests.map((guest, idx) => (
-                <motion.tr
-                  key={guest.id}
-                  variants={tableRowVariants}
-                  className={cn(
-                    "border-b border-border transition-colors hover:bg-muted/30",
-                    guest.is_present && "bg-success-bg/50",
-                    idx % 2 === 0 ? "bg-card" : "bg-muted/20"
-                  )}
-                >
-                  <td className="px-3 py-2.5">
-                    <input
-                      type="checkbox"
-                      checked={selectedGuestIds.has(guest.id)}
-                      onChange={() => {
-                        const next = new Set(selectedGuestIds);
-                        if (next.has(guest.id)) next.delete(guest.id);
-                        else next.add(guest.id);
-                        setSelectedGuestIds(next);
-                      }}
-                      className="size-4 rounded border-border text-gold focus:ring-2 focus:ring-gold"
-                    />
-                  </td>
-                  <td className="px-3 py-2.5 font-medium">
-                    {guest.last_name}
-                    {(guest.guest_count ?? 1) > 1 && (
-                      <span
-                        className="ml-1.5 inline-flex items-center rounded-full bg-gold px-1.5 py-0.5 text-[10px] font-semibold text-deep-black"
-                        title={`${guest.guest_count} personnes`}
-                      >
-                        x{guest.guest_count}
-                      </span>
+              {pageRows.map((row, idx) => {
+                const isCouple = row.kind === "couple";
+                const guest = isCouple ? row.primary : row.guest;
+                const rowIds = isCouple
+                  ? row.members.map((m) => m.id)
+                  : [guest.id];
+                const rowSelected =
+                  rowIds.length > 0 &&
+                  rowIds.every((id) => selectedGuestIds.has(id));
+                const toggleRow = () => {
+                  const next = new Set(selectedGuestIds);
+                  if (rowSelected) {
+                    rowIds.forEach((id) => next.delete(id));
+                  } else {
+                    rowIds.forEach((id) => next.add(id));
+                  }
+                  setSelectedGuestIds(next);
+                };
+                const personCount = isCouple
+                  ? row.count
+                  : guestPersonCount(guest);
+                const displayName = isCouple
+                  ? row.label
+                  : guestDisplayName(guest);
+                return (
+                  <motion.tr
+                    key={row.key}
+                    variants={tableRowVariants}
+                    className={cn(
+                      "border-b border-border transition-colors hover:bg-muted/30",
+                      guest.is_present && "bg-success-bg/50",
+                      idx % 2 === 0 ? "bg-card" : "bg-muted/20"
                     )}
-                  </td>
-                  <td className="px-3 py-2.5">{guest.first_name}</td>
-                  <td className="px-3 py-2.5 hidden md:table-cell text-muted-foreground">
-                    {guest.category ?? "—"}
-                  </td>
-                  <td className="px-3 py-2.5 hidden md:table-cell">
-                    {guest.age_type === "baby" ? (
-                      <Baby className="size-4 text-muted-foreground" />
-                    ) : (
-                      <CircleUser className="size-4 text-muted-foreground" />
-                    )}
-                    <span className="ml-1 text-xs">{AGE_LABELS[guest.age_type]}</span>
-                  </td>
-                  <td className="px-3 py-2.5 hidden lg:table-cell">
-                    {guest.group_name ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-gold/10 px-2 py-0.5 text-xs text-gold">
-                        <Users className="size-3" />
-                        {guest.group_name}
-                      </span>
-                    ) : guest.group_id ? (
-                      <span className="text-xs text-muted-foreground">Membre d&rsquo;un groupe</span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    {guest.tables?.name ? (
-                      <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs">
-                        <TableIcon className="size-3" />
-                        {guest.tables.name}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5 text-center">
-                    {guest.is_present ? (
-                      <Check className="mx-auto size-4 text-success-text" />
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5 text-right">
-                    {canManage && (
-                      <div className="flex justify-end gap-0.5">
-                        <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.1 }} whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7"
-                            aria-label="Modifier"
-                            onClick={() => openGuestModal(guest)}
-                          >
-                            <Pencil className="size-3.5" />
-                          </Button>
-                        </motion.div>
-                        {guest.group_id && (
+                  >
+                    <td className="px-3 py-2.5">
+                      <input
+                        type="checkbox"
+                        checked={rowSelected}
+                        onChange={toggleRow}
+                        className="size-4 rounded border-border text-gold focus:ring-2 focus:ring-gold"
+                      />
+                    </td>
+                    <td className="px-3 py-2.5 font-medium">
+                      {displayName}
+                      {personCount > 1 && (
+                        <span
+                          className="ml-1.5 inline-flex items-center rounded-full bg-gold px-1.5 py-0.5 text-[10px] font-semibold text-deep-black"
+                          title={`${personCount} personnes`}
+                        >
+                          x{personCount}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 hidden md:table-cell text-muted-foreground">
+                      {guest.category ?? "—"}
+                    </td>
+                    <td className="px-3 py-2.5 hidden lg:table-cell">
+                      {guest.group_name ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-gold/10 px-2 py-0.5 text-xs text-gold">
+                          <Users className="size-3" />
+                          {guest.group_name}
+                        </span>
+                      ) : guest.group_id ? (
+                        <span className="text-xs text-muted-foreground">Membre d&rsquo;un groupe</span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      {guest.tables?.name ? (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs">
+                          <TableIcon className="size-3" />
+                          {guest.tables.name}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-center">
+                      {guest.is_present ? (
+                        <Check className="mx-auto size-4 text-success-text" />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      {canManage && (
+                        <div className="flex justify-end gap-0.5">
                           <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.1 }} whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}>
                             <Button
                               variant="ghost"
                               size="icon"
                               className="size-7"
-                              aria-label="Retirer du groupe"
-                              onClick={() => removeFromGroup(guest)}
-                              title="Retirer du groupe"
+                              aria-label="Modifier"
+                              onClick={() =>
+                                isCouple
+                                  ? openCoupleModal({
+                                      groupId: guest.group_id!,
+                                      label: row.label,
+                                    })
+                                  : openGuestModal(guest)
+                              }
                             >
-                              <Users className="size-3.5" />
+                              <Pencil className="size-3.5" />
                             </Button>
                           </motion.div>
-                        )}
-                        <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.1 }} whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 text-destructive"
-                            aria-label="Supprimer"
-                            onClick={() => setDeleteTarget(guest)}
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </motion.div>
-                      </div>
-                    )}
-                  </td>
-                </motion.tr>
-              ))}
+                          {!isCouple && guest.group_id && (
+                            <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.1 }} whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-7"
+                                aria-label="Retirer du groupe"
+                                onClick={() => removeFromGroup(guest)}
+                                title="Retirer du groupe"
+                              >
+                                <Users className="size-3.5" />
+                              </Button>
+                            </motion.div>
+                          )}
+                          <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.1 }} whileTap={prefersReducedMotion ? {} : { scale: 0.9 }}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 text-destructive"
+                              aria-label="Supprimer"
+                              onClick={() =>
+                                isCouple
+                                  ? setDeleteCouple({
+                                      label: row.label,
+                                      memberIds: row.members.map((m) => m.id),
+                                      personCount: row.count,
+                                    })
+                                  : setDeleteTarget(guest)
+                              }
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </motion.div>
+                        </div>
+                      )}
+                    </td>
+                  </motion.tr>
+                );
+              })}
             </tbody>
           </table>
           </div>
@@ -1200,7 +1456,7 @@ const executeImport = async () => {
             <Users className="mx-auto mb-4 size-12 text-muted-foreground/40" />
           </motion.div>
           <p className="text-muted-foreground">
-            {search || filterPresent !== "all" || filterAge !== "all" || filterTableId !== "all"
+            {search || filterPresent !== "all" || filterTableId !== "all"
               ? "Aucun invité ne correspond aux filtres."
               : "Aucun invité pour le moment. Importez un fichier CSV ou ajoutez un invité."}
           </p>
@@ -1224,28 +1480,20 @@ initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, y: 10 }}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="first-name">Prénom *</Label>
+                <Label htmlFor="first-name">Prénom</Label>
                 <Input id="first-name" value={formFirstName} onChange={(e) => setFormFirstName(e.target.value)} className="focus-visible:ring-2 focus-visible:ring-gold" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="last-name">Nom *</Label>
+                <Label htmlFor="last-name">Nom</Label>
                 <Input id="last-name" value={formLastName} onChange={(e) => setFormLastName(e.target.value)} className="focus-visible:ring-2 focus-visible:ring-gold" />
               </div>
+              <p className="text-xs text-muted-foreground sm:col-span-2" role="note">
+                Renseignez le prénom, le nom, ou les deux — au moins un des
+                deux est requis.
+              </p>
               <div className="space-y-2">
                 <Label htmlFor="guest-category">Catégorie</Label>
                 <Input id="guest-category" value={formCategory} onChange={(e) => setFormCategory(e.target.value)} placeholder="VIP, Famille..." className="focus-visible:ring-2 focus-visible:ring-gold" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="guest-age">Tranche d&apos;âge</Label>
-                <Select
-                  id="guest-age"
-                  value={formAgeType}
-                  onValueChange={(v) => setFormAgeType(v as "adult" | "child" | "baby")}
-                >
-                  <SelectItem value="adult">Adulte</SelectItem>
-                  <SelectItem value="child">Enfant</SelectItem>
-                  <SelectItem value="baby">Bébé</SelectItem>
-                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="guest-table">Table attribuée</Label>
@@ -1298,16 +1546,6 @@ initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, y: 10 }}
                 )}
               </div>
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="guest-dietary">Notes alimentaires</Label>
-                <Textarea
-                  id="guest-dietary"
-                  rows={2}
-                  value={formDietary}
-                  onChange={(e) => setFormDietary(e.target.value)}
-                  placeholder="Allergies, régime..."
-                />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="guest-notes">Notes diverses</Label>
                 <Textarea
                   id="guest-notes"
@@ -1349,10 +1587,115 @@ initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, y: 10 }}
               <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
                 <Button
                   onClick={saveGuest}
-                  disabled={saving || !formFirstName.trim() || !formLastName.trim()}
+                  disabled={
+                    saving ||
+                    (!formFirstName.trim() && !formLastName.trim())
+                  }
                   className="bg-gold text-deep-black hover:bg-gold/90"
                 >
                   {saving ? "Sauvegarde..." : editingGuest ? "Enregistrer" : "Ajouter"}
+                </Button>
+              </motion.div>
+            </DialogFooter>
+          </motion.div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal couple (création / édition) : un seul champ « Nom du couple »,
+          les deux conjoints sont générés automatiquement */}
+      <Dialog open={coupleModalOpen} onOpenChange={setCoupleModalOpen}>
+        <DialogContent>
+          <motion.div
+            initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, y: 10 }}
+            animate={prefersReducedMotion ? {} : { opacity: 1, scale: 1, y: 0 }}
+            transition={{ type: "spring" as const, stiffness: 260, damping: 24 }}
+          >
+            <DialogHeader>
+              <DialogTitle>
+                {editingCouple ? "Modifier le couple" : "Ajouter un couple"}
+              </DialogTitle>
+              <DialogDescription>
+                Saisissez le nom du couple : les deux conjoints sont créés
+                automatiquement et le couple compte pour 2 personnes.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="couple-name">Nom du couple *</Label>
+                <Input
+                  id="couple-name"
+                  value={formCoupleName}
+                  onChange={(e) => setFormCoupleName(e.target.value)}
+                  placeholder="Couple KANZA"
+                  className="focus-visible:ring-2 focus-visible:ring-gold"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="couple-category">Catégorie</Label>
+                <Input
+                  id="couple-category"
+                  value={formCoupleCategory}
+                  onChange={(e) => setFormCoupleCategory(e.target.value)}
+                  placeholder="VIP, Famille..."
+                  className="focus-visible:ring-2 focus-visible:ring-gold"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="couple-table">Table attribuée</Label>
+                <Select
+                  id="couple-table"
+                  value={formCoupleTableId}
+                  onValueChange={setFormCoupleTableId}
+                >
+                  <SelectItem value="none">Non placé</SelectItem>
+                  {tables
+                    .filter(
+                      (t) =>
+                        !t.is_locked ||
+                        (editingCouple &&
+                          guests.some(
+                            (g) =>
+                              g.group_id === editingCouple.groupId &&
+                              g.table_id === t.id
+                          ))
+                    )
+                    .map((t) => {
+                      const placed = tableCounts[t.id] ?? 0;
+                      const hereAlready = editingCouple
+                        ? guests
+                            .filter(
+                              (g) =>
+                                g.group_id === editingCouple.groupId &&
+                                g.table_id === t.id
+                            )
+                            .reduce((a, x) => a + (x.guest_count ?? 1), 0)
+                        : 0;
+                      const free = Math.max(
+                        0,
+                        t.capacity - (placed - hereAlready) - (hereAlready ? 0 : 2)
+                      );
+                      return (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name} ({free} place{free !== 1 ? "s" : ""} libres)
+                        </SelectItem>
+                      );
+                    })}
+                </Select>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
+                <Button variant="outline" onClick={() => setCoupleModalOpen(false)}>Annuler</Button>
+              </motion.div>
+              <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
+                <Button
+                  onClick={saveCouple}
+                  disabled={coupleSaving || !formCoupleName.trim()}
+                  className="bg-gold text-deep-black hover:bg-gold/90"
+                >
+                  {coupleSaving ? "Sauvegarde..." : editingCouple ? "Enregistrer" : "Ajouter le couple"}
                 </Button>
               </motion.div>
             </DialogFooter>
@@ -1442,10 +1785,8 @@ initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, y: 10 }}
                       <SelectItem value="first_name">Prénom (obligatoire)</SelectItem>
                       <SelectItem value="last_name">Nom (obligatoire)</SelectItem>
                       <SelectItem value="category">Catégorie</SelectItem>
-                      <SelectItem value="age_type">Tranche d&apos;âge</SelectItem>
                       <SelectItem value="group_name">Groupe</SelectItem>
                       <SelectItem value="table_id">Table</SelectItem>
-                      <SelectItem value="dietary_notes">Notes alimentaires</SelectItem>
                       <SelectItem value="needs_accessibility">Accessibilité</SelectItem>
                       <SelectItem value="guest_count">Nombre de personnes</SelectItem>
                       <SelectItem value="notes">Notes</SelectItem>
@@ -1520,6 +1861,45 @@ initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, y: 10 }}
                   className="bg-destructive text-white hover:bg-destructive/90"
                 >
                   {deleting ? "Suppression..." : "Supprimer"}
+                </Button>
+              </motion.div>
+            </DialogFooter>
+          </motion.div>
+        </DialogContent>
+      </Dialog>
+    {/* Modal confirmation de suppression d'un couple */}
+      <Dialog
+        open={!!deleteCouple}
+        onOpenChange={(open) => { if (!open) setDeleteCouple(null); }}
+      >
+        <DialogContent>
+          <motion.div
+            initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, y: 10 }}
+            animate={prefersReducedMotion ? {} : { opacity: 1, scale: 1, y: 0 }}
+            transition={{ type: "spring" as const, stiffness: 260, damping: 24 }}
+          >
+            <DialogHeader>
+              <DialogTitle>Supprimer ce couple ?</DialogTitle>
+              <DialogDescription>
+                {deleteCouple
+                  ? `« ${deleteCouple.label} » (${deleteCouple.personCount} personnes) sera
+                    définitivement retiré de la liste et de sa table.`
+                  : null}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
+                <Button variant="outline" onClick={() => setDeleteCouple(null)}>
+                  Annuler
+                </Button>
+              </motion.div>
+              <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
+                <Button
+                  onClick={confirmDeleteCouple}
+                  disabled={deleting}
+                  className="bg-destructive text-white hover:bg-destructive/90"
+                >
+                  {deleting ? "Suppression..." : "Supprimer le couple"}
                 </Button>
               </motion.div>
             </DialogFooter>

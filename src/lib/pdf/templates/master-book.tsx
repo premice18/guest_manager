@@ -1,15 +1,26 @@
 // Template PDF : Livre d'Or (Master Book) — liste alphabétique des invités
 // Colonnes : N°, Noms (Prénom Nom), Nombres (taille du groupe), Table
+// Les couples (2 conjoints anonymes liés par un group_id) tiennent sur UNE
+// ligne : le nom du couple dans « Noms », et le nombre de personnes dans
+// « Nombres » (généralement 2).
 import React from "react";
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
+import {
+  getCoupleGroups,
+  getCouplePersonCount,
+  dedupeCoupleSecondaries,
+} from "@/lib/guest-helpers";
 
 interface MasterBookProps {
   eventName: string;
   eventDate: string;
   location: string | null;
   guests: Array<{
+    id: string;
     first_name: string;
     last_name: string;
+    group_name: string | null;
+    guest_count: number;
     table_name: string | null;
     group_id: string | null;
   }>;
@@ -94,14 +105,15 @@ const styles = StyleSheet.create({
   },
 });
 
-// Calcule la taille des groupes à partir de la liste des invités
+// Calcule la taille des groupes à partir de la liste des invités : un invité
+// « comptant pour plusieurs » (guest_count) pèse son poids réel.
 function computeGroupSizes(
   guests: MasterBookProps["guests"]
-): Map<string | null, number> {
-  const map = new Map<string | null, number>();
+): Map<string, number> {
+  const map = new Map<string, number>();
   for (const g of guests) {
-    const key = g.group_id ?? `__singleton__${g.first_name}_${g.last_name}`;
-    map.set(key, (map.get(key) ?? 0) + 1);
+    const key = g.group_id ?? `__singleton__${g.id}`;
+    map.set(key, (map.get(key) ?? 0) + (g.guest_count ?? 1));
   }
   return map;
 }
@@ -122,8 +134,11 @@ export function MasterBookDocument({
   location,
   guests,
 }: MasterBookProps) {
-  const totalGuests = guests.length;
-  const groupSizeMap = computeGroupSizes(guests);
+  // Les couples sont présentés sur UNE ligne : on retire les conjoints
+  // secondaires et on affiche le nom du couple avec le décompte de personnes.
+  const coupleGroups = getCoupleGroups(guests);
+  const displayGuests = dedupeCoupleSecondaries(guests);
+  const groupSizeMap = computeGroupSizes(displayGuests);
   const printDate = new Date().toLocaleDateString("fr-FR", {
     day: "numeric",
     month: "long",
@@ -150,23 +165,29 @@ export function MasterBookDocument({
 
         <View style={styles.table}>
           <TableHeader />
-          {guests.map((guest, index) => {
-            const groupSize = guest.group_id
-              ? groupSizeMap.get(guest.group_id) ?? 1
-              : 1;
+          {displayGuests.map((guest, index) => {
+            const members = guest.group_id
+              ? coupleGroups.get(guest.group_id)
+              : undefined;
+            // Couple : décompte = somme des guest_count des conjoints
+            const personCount = members
+              ? getCouplePersonCount(members)
+              : (groupSizeMap.get(guest.group_id ?? `__singleton__${guest.id}`) ?? 1);
+            // Nom affiché : nom du couple pour un couple, sinon Prénom Nom
+            const label = members
+              ? guest.group_name ?? guest.last_name
+              : [guest.first_name, guest.last_name].filter(Boolean).join(" ");
             return (
               <View
-                key={`${guest.last_name}-${guest.first_name}-${index}`}
+                key={guest.id}
                 style={[
                   styles.tableRow,
                   { backgroundColor: index % 2 === 0 ? COLORS.white : COLORS.lightGray },
                 ]}
               >
                 <Text style={styles.colNum}>{index + 1}</Text>
-                <Text style={styles.colNoms}>
-                  {guest.first_name} {guest.last_name}
-                </Text>
-                <Text style={styles.colNombres}>{groupSize}</Text>
+                <Text style={styles.colNoms}>{label}</Text>
+                <Text style={styles.colNombres}>{personCount}</Text>
                 <Text style={styles.colTable}>{guest.table_name ?? "—"}</Text>
               </View>
             );
@@ -174,7 +195,7 @@ export function MasterBookDocument({
         </View>
 
         <View style={styles.footer}>
-          <Text>Total : {totalGuests} invité{totalGuests > 1 ? "s" : ""}</Text>
+          <Text>Total : {displayGuests.length} entrée{displayGuests.length > 1 ? "s" : ""}</Text>
           <Text style={styles.printDate}>Imprimé le {printDate}</Text>
         </View>
 

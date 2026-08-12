@@ -22,7 +22,7 @@ export async function GET(
 
     const { data: guests, error } = await supabase
       .from("guests")
-      .select("first_name, last_name, group_id, table_id, tables(name)")
+      .select("id, first_name, last_name, group_id, group_name, guest_count, table_id, tables(name)")
       .eq("event_id", parsedId.data)
       .order("last_name", { ascending: true })
       .order("first_name", { ascending: true });
@@ -36,8 +36,11 @@ export async function GET(
     }
 
     const guestsList = (guests ?? []).map((g) => ({
+      id: g.id,
       first_name: g.first_name,
       last_name: g.last_name,
+      group_name: g.group_name,
+      guest_count: g.guest_count,
       table_name: (g.tables as unknown as { name: string } | null)?.name ?? null,
       group_id: g.group_id,
     }));

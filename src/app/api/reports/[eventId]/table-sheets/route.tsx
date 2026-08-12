@@ -25,7 +25,7 @@ export async function GET(
       supabase.from("tables").select("id, name, capacity, zone_id").eq("event_id", parsedId.data).order("sort_order", { ascending: true }),
       supabase
         .from("guests")
-        .select("first_name, last_name, category, age_type, dietary_notes, needs_accessibility, table_id, tables(name)")
+        .select("first_name, last_name, category, needs_accessibility, table_id, tables(name)")
         .eq("event_id", parsedId.data),
     ]);
 
@@ -53,8 +53,6 @@ export async function GET(
           first_name: g.first_name,
           last_name: g.last_name,
           category: g.category,
-          age_type: g.age_type,
-          dietary_notes: g.dietary_notes,
           needs_accessibility: g.needs_accessibility,
         })),
     }));

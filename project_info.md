@@ -60,6 +60,8 @@ Enums : `age_category` ('adult','child','baby'), `table_shape` ('round','rectang
 | `zones`       | `id`, `event_id`, `name`                                                                                                                 |
 | `tables`      | `id`, `event_id`, `zone_id` (nullable), `name`, `capacity`, `shape` (enum), `is_locked`, `sort_order`                                    |
 | `guests`      | `id`, `event_id`, `table_id` (nullable), `first_name`, `last_name`, `group_id`, `group_name`, `category`, `age_type`, `dietary_notes`, `needs_accessibility`, `is_present`, `checked_in_at`, `notes`, `guest_count` (≥1, défaut 1 : un invité peut « compter pour plusieurs ») |
+
+**Remarque (champs masqués)** : `age_type` (tranche d'âge) et `dietary_notes` (notes alimentaires) sont **conservés en base** mais **masqués dans l'interface et les exports courants** (formulaires, liste, CSV, master-book, fiches tables). Seule la synthèse traiteur (catering-summary) continue de s'appuyer sur `dietary_notes` et la répartition par âge. En création/édition, `age_type` est fixé à `'adult'` par défaut et `dietary_notes` reste vide (l'existant est préservé).
 | `event_staff` | `id`, `event_id`, `user_id` (→ `auth.users`), `role` ('admin' ou 'host')                                                                |
 
 **Types Supabase** : `src/types/database.types.ts` (générés manuellement, comprenant les relations FK pour les jointures typées).

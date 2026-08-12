@@ -12,8 +12,6 @@ interface TableSheetsProps {
       first_name: string;
       last_name: string;
       category: string | null;
-      age_type: string;
-      dietary_notes: string | null;
       needs_accessibility: boolean;
     }>;
   }>;
@@ -82,22 +80,15 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 2,
   },
-  colName: { width: "30%" },
-  colCategory: { width: "20%" },
-  colAge: { width: "15%" },
-  colDiet: { width: "35%" },
+  colName: { width: "50%" },
+  colCategory: { width: "30%" },
+  colAccess: { width: "20%" },
   emptyMessage: {
     textAlign: "center",
     color: COLORS.anthracite,
     fontSize: 9,
     fontStyle: "italic",
     marginVertical: 12,
-  },
-  dietarySummary: {
-    fontSize: 8,
-    color: COLORS.anthracite,
-    marginTop: 6,
-    marginBottom: 4,
   },
   notes: {
     marginTop: 20,
@@ -121,8 +112,6 @@ export function TableSheetsDocument({ eventName, tables }: TableSheetsProps) {
   return (
     <Document>
       {tables.map((table, tIndex) => {
-        const dietarySummary = extractDietarySummary(table.guests);
-
         return (
           <Page key={tIndex} size="A4" style={styles.page}>
             <View style={styles.eventHeader}>
@@ -136,12 +125,6 @@ export function TableSheetsDocument({ eventName, tables }: TableSheetsProps) {
                 <Text style={styles.tableMeta}>Zone : {table.zone_name}</Text>
               </View>
 
-              {dietarySummary.length > 0 && (
-                <Text style={styles.dietarySummary}>
-                  Régimes : {dietarySummary.map((d) => `${d.type} (×${d.count})`).join(", ")}
-                </Text>
-              )}
-
               {table.guests.length === 0 ? (
                 <Text style={styles.emptyMessage}>Aucun invité attribué</Text>
               ) : (
@@ -149,8 +132,7 @@ export function TableSheetsDocument({ eventName, tables }: TableSheetsProps) {
                   <View style={styles.guestHeader}>
                     <Text style={styles.colName}>Nom Prénom</Text>
                     <Text style={styles.colCategory}>Catégorie</Text>
-                    <Text style={styles.colAge}>Âge</Text>
-                    <Text style={styles.colDiet}>Restrictions / Accessibilité</Text>
+                    <Text style={styles.colAccess}>Accessibilité</Text>
                   </View>
                   {table.guests.map((guest, gIndex) => (
                     <View
@@ -164,17 +146,8 @@ export function TableSheetsDocument({ eventName, tables }: TableSheetsProps) {
                         {guest.last_name} {guest.first_name}
                       </Text>
                       <Text style={styles.colCategory}>{guest.category ?? "—"}</Text>
-                      <Text style={styles.colAge}>
-                        {guest.age_type === "adult"
-                          ? "Adulte"
-                          : guest.age_type === "child"
-                          ? "Enfant"
-                          : "Bébé"}
-                      </Text>
-                      <Text style={styles.colDiet}>
-                        {[guest.dietary_notes, guest.needs_accessibility ? "♿" : null]
-                          .filter(Boolean)
-                          .join(" — ") || "—"}
+                      <Text style={styles.colAccess}>
+                        {guest.needs_accessibility ? "♿" : "—"}
                       </Text>
                     </View>
                   ))}
@@ -193,22 +166,4 @@ export function TableSheetsDocument({ eventName, tables }: TableSheetsProps) {
       })}
     </Document>
   );
-}
-
-// Extrait le résumé des régimes alimentaires pour une table
-function extractDietarySummary(
-  guests: Array<{ dietary_notes: string | null }>
-): Array<{ type: string; count: number }> {
-  const diets = new Map<string, number>();
-  for (const g of guests) {
-    if (g.dietary_notes) {
-      const types = g.dietary_notes.split(",").map((d) => d.trim().toLowerCase());
-      for (const t of types) {
-        diets.set(t, (diets.get(t) ?? 0) + 1);
-      }
-    }
-  }
-  return Array.from(diets.entries())
-    .map(([type, count]) => ({ type, count }))
-    .sort((a, b) => b.count - a.count);
 }

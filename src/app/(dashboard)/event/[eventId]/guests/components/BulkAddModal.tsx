@@ -1,7 +1,11 @@
 "use client";
 // Modal d'ajout rapide d'invités en masse (bulk add)
-// Permet de saisir plusieurs invités simultanément avec prénom, nom, type (singleton/couple) et table
-// Supporte l'import CSV intégré et la création de couples liés par group_id
+// Permet de saisir plusieurs invités simultanément avec prénom, nom, type
+// (singleton/couple) et table.
+// - Singleton : le prénom OU le nom suffisent (au moins un des deux).
+// - Couple : un seul champ « Nom du couple » ; les 2 conjoints sont générés
+//   automatiquement (prénom vide, group_id partagé) — plus d'erreur
+//   « Conjoint manquant ».
 
 import { nanoid } from "nanoid";
 import { useState, useCallback, useRef } from "react";
@@ -33,12 +37,11 @@ type Table = Database["public"]["Tables"]["tables"]["Row"];
 
 interface BulkAddRow {
   id: string; // clé locale unique
-  firstName: string;
-  lastName: string;
   type: "singleton" | "couple";
+  firstName: string; // prénom (ignoré pour un couple)
+  lastName: string; // nom, ou « nom du couple » pour un couple
   tableId: string;
-  coupleKey: string | null; // clé partagée par les 2 membres d'un couple
-  guestCount: number; // nombre de personnes que représente la ligne (>= 1)
+  guestCount: number; // nombre de personnes représentées par un singleton (>= 1)
 }
 
 interface BulkAddModalProps {
@@ -46,8 +49,11 @@ interface BulkAddModalProps {
   onOpenChange: (open: boolean) => void;
   eventId: string;
   tables: Table[];
-  tableCounts?: Record<string, number>; // nombre d'invités placés par table
+  tableCounts?: Record<string, number>; // nombre de personnes placées par table
   onSuccess: () => void; // rappel pour rafraîchir la liste
+  // Table pré-selectionnée (saisie directe depuis une carte de table) : toutes
+  // les lignes créées sont attribuées à cette table par défaut.
+  defaultTableId?: string;
 }
 
 // Génère un ID local unique pour chaque ligne
@@ -55,17 +61,18 @@ function localId(): string {
   return Math.random().toString(36).substring(2, 10);
 }
 
-// Crée 3 lignes vides par défaut
-function createEmptyRow(type: "singleton" | "couple" = "singleton"): BulkAddRow {
+// Crée 3 lignes vides par défaut (par défaut attribuée à la table passée)
+function createEmptyRow(
+  type: "singleton" | "couple" = "singleton",
+  defaultTableId = ""
+): BulkAddRow {
   return {
     id: localId(),
+    type,
     firstName: "",
     lastName: "",
-    type,
-    tableId: "",
+    tableId: defaultTableId,
     guestCount: 1,
-    // Un couple partage une même clé pour relier explicitement ses 2 membres
-    coupleKey: type === "couple" ? localId() : null,
   };
 }
 
@@ -78,6 +85,7 @@ export default function BulkAddModal({
   tables,
   tableCounts,
   onSuccess,
+  defaultTableId,
 }: BulkAddModalProps) {
   const prefersReducedMotion = useReducedMotion();
   // Client Supabase créé une seule fois (état paresseux) — fix audit.
@@ -86,9 +94,28 @@ export default function BulkAddModal({
 
   // État des lignes de saisie
   const [rows, setRows] = useState<BulkAddRow[]>(() =>
-    Array.from({ length: INITIAL_ROWS }, () => createEmptyRow())
+    Array.from({ length: INITIAL_ROWS }, () =>
+      createEmptyRow("singleton", defaultTableId)
+    )
   );
   const [saving, setSaving] = useState(false);
+
+  // Réinitialise les lignes à chaque ouverture : ainsi les lignes vides
+  // repartent sur la table par défaut (pertinent pour le lancement depuis
+  // une carte de table), et le modal ne conserve pas une ancienne saisie.
+  // Ajustement d'état pendant le rendu (pattern React recommandé : la valeur
+  // précédente est mémorisée pour détecter la transition fermé -> ouvert).
+  const [prevOpen, setPrevOpen] = useState<boolean | null>(null);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setRows(
+        Array.from({ length: INITIAL_ROWS }, () =>
+          createEmptyRow("singleton", defaultTableId)
+        )
+      );
+    }
+  }
 
   // État import CSV
   const [csvText, setCsvText] = useState("");
@@ -100,34 +127,24 @@ export default function BulkAddModal({
     [tableCounts]
   );
 
-  // Capacité restante d'une table (capacité - invités déjà placés)
-
-  // Ajoute une ligne vide
+  // Ajoute une ligne vide (attribuée à la table par défaut si fournie)
   const addRow = (type: "singleton" | "couple" = "singleton") => {
-    setRows((prev) => [...prev, createEmptyRow(type)]);
+    setRows((prev) => [...prev, createEmptyRow(type, defaultTableId)]);
   };
 
-  // Supprime une ligne (et sa ligne partenaire si c'est un couple)
+  // Supprime une ligne
   const removeRow = (id: string) => {
-    setRows((prev) => {
-      const target = prev.find((r) => r.id === id);
-      if (target?.type === "couple" && target.coupleKey) {
-        // Retire également le conjoint lié par la même coupleKey
-        return prev.filter(
-          (r) => r.id !== id && !(r.coupleKey === target.coupleKey && r.id !== id)
-        );
-      }
-      return prev.filter((r) => r.id !== id);
-    });
+    setRows((prev) => prev.filter((r) => r.id !== id));
   };
 
-  // Duplique une ligne
+  // Duplique une ligne : le champ table est conservé tel quel
   const duplicateRow = (row: BulkAddRow) => {
     setRows((prev) => [
       ...prev,
-      { ...row, id: localId(), firstName: row.firstName, lastName: row.lastName, coupleKey: null },
+      { ...row, id: localId() },
     ]);
   };
+
   // Met à jour un champ d'une ligne
   const updateRow = (id: string, field: keyof BulkAddRow, value: string) => {
     setRows((prev) => {
@@ -139,80 +156,48 @@ export default function BulkAddModal({
         parsed = Math.max(1, Math.min(99, parseInt(value, 10) || 1));
       }
       const updated = { ...prev[index], [field]: parsed };
-
-      // Si on change le type en "couple", on ajoute automatiquement une ligne partenaire
-      if (field === "type" && value === "couple" && prev[index].type !== "couple") {
-        const coupleKey = localId();
-        const updatedRow = { ...updated, coupleKey };
-        const partnerRow: BulkAddRow = {
-          ...createEmptyRow("couple"),
-          coupleKey,
-        };
-        const newRows = [...prev];
-        newRows[index] = updatedRow;
-        newRows.splice(index + 1, 0, partnerRow);
-        return newRows;
-      }
-
-      // Si on revient à "singleton", on retire le lien de couple
-      if (field === "type" && value === "singleton" && prev[index].type === "couple") {
-        return prev.map((r, i) =>
-          i === index ? { ...r, coupleKey: null } : r
-        );
-      }
-
       const newRows = [...prev];
       newRows[index] = updated;
       return newRows;
     });
   };
 
-// Récupère les couples (groupes de lignes partageant la même coupleKey)
-  const getCoupleGroups = (): BulkAddRow[][] => {
-    const groups: BulkAddRow[][] = [];
-    const visited = new Set<string>();
-
-    for (const row of rows) {
-      if (row.type !== "couple" || !row.coupleKey || visited.has(row.id)) continue;
-      const members = rows.filter(
-        (r) => r.type === "couple" && r.coupleKey === row.coupleKey
-      );
-      for (const m of members) visited.add(m.id);
-      groups.push(members);
-    }
-
-    return groups;
-  };
-
   // Valide les lignes avant enregistrement
   const validateRows = (): string[] => {
     const errors: string[] = [];
-    const coupleGroups = getCoupleGroups();
+    const occupancy: Record<string, number> = {};
 
     for (const row of rows) {
-      if (!row.firstName.trim()) errors.push(`Ligne : Prénom manquant`);
-      if (!row.lastName.trim()) errors.push(`Ligne : Nom manquant`);
+      if (row.type === "couple") {
+        if (!row.lastName.trim()) {
+          errors.push("Ligne : nom du couple manquant");
+        } else {
+          // Un couple occupe 2 places sur sa table
+          if (row.tableId) {
+            occupancy[row.tableId] = (occupancy[row.tableId] ?? 0) + 2;
+          }
+        }
+        continue;
+      }
+
+      // Singleton : prénom OU nom (au moins un des deux)
+      if (!row.firstName.trim() && !row.lastName.trim()) {
+        errors.push("Ligne : renseignez au moins le prénom ou le nom");
+      }
       // Le nombre de personnes doit rester dans [1, 99] (cohérent avec la base)
       if (!Number.isInteger(row.guestCount) || row.guestCount < 1 || row.guestCount > 99) {
         errors.push(`Ligne : nombre de personnes invalide (1 à 99)`);
       }
-    }
-
-    // Vérifie que chaque couple a 2 membres
-    for (const group of coupleGroups) {
-      if (group.length < 2) {
-        errors.push(`Couple "${group[0].firstName} ${group[0].lastName}" : conjoint manquant`);
+      if (row.firstName.trim() || row.lastName.trim()) {
+        if (row.tableId) {
+          occupancy[row.tableId] =
+            (occupancy[row.tableId] ?? 0) + (row.guestCount ?? 1);
+        }
       }
     }
 
     // Vérifie la capacité des tables sélectionnées (somme des guest_count :
-    // un invité "comptant pour 5" occupe 5 places).
-    const occupancy: Record<string, number> = {};
-    for (const row of rows) {
-      if (!row.firstName.trim() || !row.lastName.trim()) continue;
-      if (!row.tableId) continue;
-      occupancy[row.tableId] = (occupancy[row.tableId] ?? 0) + (row.guestCount ?? 1);
-    }
+    // un invité "comptant pour 5" occupe 5 places, un couple 2 places).
     for (const [tableId, count] of Object.entries(occupancy)) {
       const table = tables.find((t) => t.id === tableId);
       if (!table) continue;
@@ -235,8 +220,8 @@ export default function BulkAddModal({
       return;
     }
 
-    // Filtre les lignes vides
-    const validRows = rows.filter((r) => r.firstName.trim() && r.lastName.trim());
+    // Filtre les lignes vides (singletons totalement vides)
+    const validRows = rows.filter((r) => r.firstName.trim() || r.lastName.trim());
 
     if (validRows.length === 0) {
       toast.error("Aucune ligne valide à ajouter");
@@ -246,55 +231,47 @@ export default function BulkAddModal({
     setSaving(true);
 
     try {
-      // Construit les inserts pour Supabase
-      const inserts: Array<{
-        event_id: string;
-        first_name: string;
-        last_name: string;
-        table_id: string | null;
-        group_id: string | null;
-        group_name: string | null;
-        age_type: "adult" | "child" | "baby";
-        guest_count: number;
-      }> = [];
+      const inserts: Array<Database["public"]["Tables"]["guests"]["Insert"]> = [];
 
-      // Traite les couples
-      const coupleGroups = getCoupleGroups();
-      const coupleMemberIds = new Set(coupleGroups.flatMap((g) => g.map((r) => r.id)));
-
-      for (const group of coupleGroups) {
-        if (group.length < 2) continue;
-        const groupId = nanoid();
-        const lastName = group[0].lastName || group[1]?.lastName || "Couple";
-
-        for (const member of group) {
-          if (!member.firstName.trim() || !member.lastName.trim()) continue;
+      for (const row of validRows) {
+        if (row.type === "couple") {
+          // Un couple = 2 conjoints anonymes partageant group_id/group_name
+          const name = row.lastName.trim();
+          const groupId = nanoid();
+          inserts.push(
+            {
+              event_id: eventId,
+              first_name: "",
+              last_name: name,
+              table_id: row.tableId || null,
+              group_id: groupId,
+              group_name: name,
+              age_type: "adult",
+              guest_count: 1,
+            },
+            {
+              event_id: eventId,
+              first_name: "",
+              last_name: name,
+              table_id: row.tableId || null,
+              group_id: groupId,
+              group_name: name,
+              age_type: "adult",
+              guest_count: 1,
+            }
+          );
+        } else {
           inserts.push({
             event_id: eventId,
-            first_name: member.firstName.trim(),
-            last_name: member.lastName.trim(),
-            table_id: member.tableId || null,
-            group_id: groupId,
-            group_name: `Couple ${lastName}`,
+            first_name: row.firstName.trim(),
+            last_name: row.lastName.trim(),
+            table_id: row.tableId || null,
+            group_id: null,
+            group_name: null,
             age_type: "adult",
-            guest_count: member.guestCount || 1,
+            guest_count: row.guestCount || 1,
           });
         }
-      }
-
-      // Traite les singletons
-      for (const row of validRows) {
-        if (coupleMemberIds.has(row.id)) continue;
-        inserts.push({
-          event_id: eventId,
-          first_name: row.firstName.trim(),
-          last_name: row.lastName.trim(),
-          table_id: row.tableId || null,
-          group_id: null,
-          group_name: null,
-          age_type: "adult",
-          guest_count: row.guestCount || 1,
-        });
       }
 
       if (inserts.length === 0) {
@@ -316,7 +293,8 @@ export default function BulkAddModal({
       onSuccess();
 
       // Réinitialise les lignes
-      setRows(Array.from({ length: INITIAL_ROWS }, () => createEmptyRow()));
+      setRows(Array.from({ length: INITIAL_ROWS }, () =>
+        createEmptyRow("singleton", defaultTableId)));
     } catch {
       toast.error("Erreur lors de l'ajout des invités");
     } finally {
@@ -364,51 +342,55 @@ export default function BulkAddModal({
       (h) => h.includes("nombre") || h.includes("nombres") || h.includes("count")
     );
 
-    if (firstNameIdx < 0 || lastNameIdx < 0) {
-      toast.error("Le CSV doit contenir les colonnes 'prenom' et 'nom'");
+    if (firstNameIdx < 0 && lastNameIdx < 0) {
+      toast.error("Le CSV doit contenir au moins une colonne 'prenom' ou 'nom'");
       return;
     }
 
-    // Crée les lignes à partir du CSV
+    // Crée les lignes à partir du CSV — chaque ligne « couple » du fichier
+    // devient un couple à part entière.
     const tableMap = new Map(tables.map((t) => [t.name.toLowerCase(), t.id]));
     const importedRows: BulkAddRow[] = [];
-    let pendingCoupleKey: string | null = null;
 
     for (const row of data) {
-      const firstName = row[firstNameIdx] ?? "";
-      const lastName = row[lastNameIdx] ?? "";
+      const firstName = firstNameIdx >= 0 ? (row[firstNameIdx] ?? "") : "";
+      const lastName = lastNameIdx >= 0 ? (row[lastNameIdx] ?? "") : "";
       const type =
         typeIdx >= 0 && row[typeIdx]?.toLowerCase().includes("couple")
           ? "couple"
           : "singleton";
       const tableName = tableIdx >= 0 ? (row[tableIdx] ?? "") : "";
-      const tableId = tableName ? tableMap.get(tableName.toLowerCase()) ?? "" : "";
-      // Nombre de personnes : borne à [1, 99], défaut 1 si absent/invalide
+      const tableId = tableName
+        ? tableMap.get(tableName.toLowerCase()) ?? ""
+        // Sans colonne « table » dans le CSV, on attribue la table par défaut
+        // (saisie depuis une carte de table) si elle est fournie.
+        : defaultTableId ?? "";
+      // Nombre de personnes : borné à [1, 99], défaut 1 si absent/invalide
       const rawCount = countIdx >= 0 ? parseInt(row[countIdx] ?? "", 10) : NaN;
       const guestCount = Number.isInteger(rawCount)
         ? Math.max(1, Math.min(99, rawCount))
         : 1;
 
-      let coupleKey: string | null = null;
       if (type === "couple") {
-        if (pendingCoupleKey) {
-          coupleKey = pendingCoupleKey;
-          pendingCoupleKey = null;
-        } else {
-          coupleKey = localId();
-          pendingCoupleKey = coupleKey;
-        }
+        // Le nom du couple est le nom de la ligne (ou son prénom en secours)
+        importedRows.push({
+          id: localId(),
+          type,
+          firstName: "",
+          lastName: lastName || firstName,
+          tableId,
+          guestCount: 1,
+        });
+      } else {
+        importedRows.push({
+          id: localId(),
+          type,
+          firstName,
+          lastName,
+          tableId,
+          guestCount,
+        });
       }
-
-      importedRows.push({
-        id: localId(),
-        firstName,
-        lastName,
-        type,
-        tableId,
-        coupleKey,
-        guestCount,
-      });
     }
 
     if (importedRows.length === 0) {
@@ -461,8 +443,8 @@ export default function BulkAddModal({
             </DialogTitle>
             <DialogDescription>
               Saisissez plusieurs invités en une seule fois.
-              Chaque ligne correspond à un invité ou un couple.
-              Les champs marqués * sont obligatoires.
+              Un couple se crée avec un simple nom de couple.
+              Pour un invité seul, le prénom OU le nom suffisent.
             </DialogDescription>
           </DialogHeader>
 
@@ -521,7 +503,7 @@ export default function BulkAddModal({
                     rows={4}
                     value={csvText}
                     onChange={(e) => setCsvText(e.target.value)}
-                    placeholder={`prenom,nom,type,table\nJean,Dupont,singleton,Table 1\nMarie,Martin,couple,Table 2`}
+                    placeholder={`prenom,nom,type,table\nJean,Dupont,singleton,Table 1\n,KANZA,couple,Table 2`}
                     className="mb-3 bg-card"
                   />
                   <input
@@ -555,8 +537,8 @@ export default function BulkAddModal({
               <thead>
                 <tr className="border-b border-border bg-muted text-foreground">
                   <th className="w-10 px-2 py-2.5 text-center text-xs font-medium">N°</th>
-                  <th className="px-2 py-2.5 text-left text-xs font-medium">Prénom *</th>
-                  <th className="px-2 py-2.5 text-left text-xs font-medium">Nom *</th>
+                  <th className="px-2 py-2.5 text-left text-xs font-medium">Prénom</th>
+                  <th className="px-2 py-2.5 text-left text-xs font-medium">Nom / Couple *</th>
                   <th className="w-16 px-2 py-2.5 text-center text-xs font-medium" title="Nombre de personnes (1 par défaut)">Nbre</th>
                   <th className="w-24 px-2 py-2.5 text-left text-xs font-medium">Type</th>
                   <th className="px-2 py-2.5 text-left text-xs font-medium">Table</th>
@@ -587,37 +569,51 @@ export default function BulkAddModal({
                         )}
                       </td>
                       <td className="px-2 py-1.5">
-                        <Input
-                          value={row.firstName}
-                          onChange={(e) => updateRow(row.id, "firstName", e.target.value)}
-                          placeholder="Prénom"
-                          className="h-9 text-xs focus-visible:ring-2 focus-visible:ring-gold"
-                        />
+                        {/* Le prénom n'a pas de sens pour un couple */}
+                        {isCouple ? (
+                          <span className="block text-center text-xs text-muted-foreground/40">—</span>
+                        ) : (
+                          <Input
+                            value={row.firstName}
+                            onChange={(e) => updateRow(row.id, "firstName", e.target.value)}
+                            placeholder="Prénom"
+                            className="h-9 text-xs focus-visible:ring-2 focus-visible:ring-gold"
+                          />
+                        )}
                       </td>
                       <td className="px-2 py-1.5">
                         <Input
                           value={row.lastName}
                           onChange={(e) => updateRow(row.id, "lastName", e.target.value)}
-                          placeholder="Nom"
-                          className="h-9 text-xs focus-visible:ring-2 focus-visible:ring-gold"
+                          placeholder={isCouple ? "Nom du couple (ex : Couple KANZA)" : "Nom"}
+                          className={cn(
+                            "h-9 text-xs focus-visible:ring-2 focus-visible:ring-gold",
+                            isCouple && "border-gold/50"
+                          )}
                         />
                       </td>
                       <td className="px-2 py-1.5">
-                        <Input
-                          type="number"
-                          min={1}
-                          max={99}
-                          value={row.guestCount}
-                          onChange={(e) => updateRow(row.id, "guestCount", e.target.value)}
-                          title="Nombre de personnes (1 pour un seul invité)"
-                          className="h-9 w-16 text-center text-xs focus-visible:ring-2 focus-visible:ring-gold"
-                        />
+                        {isCouple ? (
+                          <span className="block text-center text-xs text-muted-foreground/40" title="Un couple compte pour 2 personnes">
+                            2
+                          </span>
+                        ) : (
+                          <Input
+                            type="number"
+                            min={1}
+                            max={99}
+                            value={row.guestCount}
+                            onChange={(e) => updateRow(row.id, "guestCount", e.target.value)}
+                            title="Nombre de personnes (1 pour un seul invité)"
+                            className="h-9 w-16 text-center text-xs focus-visible:ring-2 focus-visible:ring-gold"
+                          />
+                        )}
                       </td>
                       <td className="px-2 py-1.5">
                         <Select
                           value={row.type}
                           onValueChange={(v) =>
-                            updateRow(row.id, "type", v)
+                            updateRow(row.id, "type", v as "singleton" | "couple")
                           }
                           className={cn(
                             "h-9 px-2 text-xs",
@@ -674,9 +670,13 @@ export default function BulkAddModal({
           {/* Indicateur de lignes */}
           <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
             <span>
-              {rows.filter((r) => r.firstName.trim() && r.lastName.trim()).length} invité(s) saisi(s)
+              {rows.reduce(
+                (acc, r) =>
+                  acc + (r.type === "couple" ? (r.lastName.trim() ? 2 : 0) : r.firstName.trim() || r.lastName.trim() ? 1 : 0),
+                0
+              )} invité(s) saisi(s)
               {" — "}
-              {getCoupleGroups().length} couple(s)
+              {rows.filter((r) => r.type === "couple" && r.lastName.trim()).length} couple(s)
             </span>
             {rows.length > 0 && (
               <motion.button
@@ -711,4 +711,3 @@ export default function BulkAddModal({
     </Dialog>
   );
 }
-
