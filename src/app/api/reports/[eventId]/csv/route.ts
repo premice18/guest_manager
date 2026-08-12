@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireEventAccess, uuidSchema, handleAuthError } from "@/lib/auth";
+import {
+  getCoupleGroups,
+  getCouplePersonCount,
+  guestPersonCount,
+  dedupeCoupleSecondaries,
+} from "@/lib/guest-helpers";
 
 export async function GET(
   _request: Request,
@@ -20,7 +26,7 @@ export async function GET(
 
     const { data: guests, error } = await supabase
       .from("guests")
-      .select("id, first_name, last_name, category, age_type, dietary_notes, needs_accessibility, is_present, checked_in_at, group_id, group_name, notes, table_id, tables(name)")
+      .select("id, first_name, last_name, category, needs_accessibility, is_present, checked_in_at, group_id, group_name, guest_count, notes, table_id, tables(name)")
       .eq("event_id", parsedId.data)
       .order("last_name", { ascending: true })
       .order("first_name", { ascending: true });
@@ -45,43 +51,55 @@ export async function GET(
       return `"${str.replace(/"/g, '""')}"`;
     }
 
+    // Les couples (2 conjoints anonymes liés par un group_id) apparaissent sur
+    // UNE seule ligne avec le nom du couple et le décompte de personnes.
+    const guestRows = dedupeCoupleSecondaries(guests ?? []);
+    const coupleGroups = getCoupleGroups(guests ?? []);
+
     const headers = [
       "ID",
-      "Nom",
+      "Noms",
       "Prénom",
       "Catégorie",
-      "Âge",
-      "Table",
+      "Nombres",
       "Groupe",
-      "Régimes",
+      "Table",
       "Accessibilité",
       "Présent",
       "Heure arrivée",
       "Notes",
     ];
 
-    const rows = (guests ?? []).map((g) => [
-      g.id,
-      g.last_name,
-      g.first_name,
-      g.category ?? "",
-      g.age_type === "adult" ? "Adulte" : g.age_type === "child" ? "Enfant" : "Bébé",
-      (g.tables as unknown as { name: string } | null)?.name ?? "",
-      g.group_name ?? "",
-      g.dietary_notes ?? "",
-      g.needs_accessibility ? "Oui" : "Non",
-      g.is_present ? "Oui" : "Non",
-      g.checked_in_at
-        ? new Date(g.checked_in_at).toLocaleString("fr-FR", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          })
-        : "",
-      g.notes ?? "",
-    ]);
+    const rows = guestRows.map((g) => {
+      const members = g.group_id ? coupleGroups.get(g.group_id) : undefined;
+      const personCount = members
+        ? getCouplePersonCount(members)
+        : guestPersonCount(g);
+      const displayName = members
+        ? g.group_name ?? g.last_name
+        : [g.last_name, g.first_name].filter(Boolean).join(" ").trim();
+      return [
+        g.id,
+        displayName,
+        members ? "" : g.first_name,
+        g.category ?? "",
+        String(personCount),
+        g.group_name ?? "",
+        (g.tables as unknown as { name: string } | null)?.name ?? "",
+        g.needs_accessibility ? "Oui" : "Non",
+        g.is_present ? "Oui" : "Non",
+        g.checked_in_at
+          ? new Date(g.checked_in_at).toLocaleString("fr-FR", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "",
+        g.notes ?? "",
+      ];
+    });
 
     const csvContent = [
       headers.join(";"),

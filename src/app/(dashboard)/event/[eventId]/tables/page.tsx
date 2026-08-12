@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database.types";
@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import BulkAddModal from "@/app/(dashboard)/event/[eventId]/guests/components/BulkAddModal";
 import {
   ArrowLeft,
   Plus,
@@ -31,6 +32,7 @@ import {
   Lock,
   Unlock,
   GripVertical,
+  UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, useReducedMotion } from "framer-motion";
@@ -86,6 +88,17 @@ const prefersReducedMotion = useReducedMotion();
   const [search, setSearch] = useState("");
   const [zoneFilter, setZoneFilter] = useState("all");
 
+  // Droits d'écriture : owner/admin peuvent tout faire, les hôtes sont en
+  // lecture seule (pas d'ajout d'invité depuis les tables).
+  const [canManage, setCanManage] = useState(false);
+
+  // Modal d'ajout rapide d'invités pour une table (saisie directe ici)
+  const [addGuestsTableId, setAddGuestsTableId] = useState<string | null>(null);
+
+  // Nombre de personnes placées par table (somme des guest_count) — utilisé
+  // pour la validation de capacité du modal d'ajout.
+  const [tableCounts, setTableCounts] = useState<Record<string, number>>({});
+
   // État du formulaire modal pour créer/éditer une table
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTable, setEditingTable] = useState<Table | null>(null);
@@ -96,6 +109,66 @@ const prefersReducedMotion = useReducedMotion();
   const [formLocked, setFormLocked] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Charge les données (tables, invités, zones) et laisse droit de l'utilisateur
+  const loadData = useCallback(async (id: string) => {
+    const [tblsRes, guestCountsRes, znsRes, roleRes] = await Promise.all([
+      supabase
+        .from("tables")
+        .select("id, name, capacity, zone_id, is_locked, sort_order, shape")
+        .eq("event_id", id)
+        .order("sort_order", { ascending: true })
+        .order("name"),
+      // Récupère table_id + guest_count pour un comptage EN PERSONNES
+      supabase
+        .from("guests")
+        .select("table_id, guest_count")
+        .eq("event_id", id),
+      supabase.from("zones").select("id, name").eq("event_id", id).order("name"),
+      supabase.auth.getUser(),
+    ]);
+
+    const rawTables = (tblsRes.data ?? []) as Table[];
+    const personMap: Record<string, number> = {};
+    for (const g of (guestCountsRes.data ?? []) as {
+      table_id: string | null;
+      guest_count: number | null;
+    }[]) {
+      if (g.table_id) {
+        personMap[g.table_id] =
+          (personMap[g.table_id] ?? 0) + (g.guest_count ?? 1);
+      }
+    }
+
+    // Détermine si l'utilisateur courant peut gérer (owner ou admin)
+    const currentUser = roleRes?.data?.user ?? null;
+    let canWrite = false;
+    if (currentUser?.id) {
+      const { data: evOwner } = await supabase
+        .from("events")
+        .select("owner_id")
+        .eq("id", id)
+        .single();
+      if (evOwner?.owner_id === currentUser.id) {
+        canWrite = true;
+      } else {
+        const { data: staffRow } = await supabase
+          .from("event_staff")
+          .select("role")
+          .eq("event_id", id)
+          .eq("user_id", currentUser.id)
+          .maybeSingle();
+        canWrite = staffRow?.role === "admin";
+      }
+    }
+
+    return {
+      rawTables,
+      personMap,
+      zones: (znsRes.data ?? []) as Zone[],
+      canWrite,
+    };
+  }, [supabase]);
+
 useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -103,78 +176,38 @@ useEffect(() => {
       if (cancelled) return;
       setEventId(id);
 
-      // Récupère les tables et le nombre d'invités associés
-      const { data: tbls } = await supabase
-        .from("tables")
-        .select("*")
-        .eq("event_id", id)
-        .order("sort_order", { ascending: true })
-        .order("name");
-      const rawTables = (tbls ?? []) as Table[];
-
-      const { data: guestCounts } = await supabase
-        .from("guests")
-        .select("table_id")
-        .eq("event_id", id);
-      const countMap: Record<string, number> = {};
-      for (const g of (guestCounts ?? []) as { table_id: string | null }[]) {
-        if (g.table_id) countMap[g.table_id] = (countMap[g.table_id] ?? 0) + 1;
-      }
-
-      const { data: zns } = await supabase
-        .from("zones")
-        .select("*")
-        .eq("event_id", id)
-        .order("name");
+      const result = await loadData(id);
 
       if (!cancelled) {
         setTables(
-          rawTables.map((t) => ({
+          result.rawTables.map((t) => ({
             ...t,
-            guest_count: countMap[t.id] ?? 0,
+            guest_count: result.personMap[t.id] ?? 0,
           }))
         );
-        setZones(zns ?? []);
+        setZones(result.zones);
+        setTableCounts(result.personMap);
+        setCanManage(result.canWrite);
         setLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [params, supabase]);
+  }, [params, supabase, loadData]);
 
   const refreshData = async () => {
     if (!eventId) return;
-    const { data: tbls } = await supabase
-      .from("tables")
-      .select("*")
-      .eq("event_id", eventId)
-      .order("sort_order", { ascending: true })
-      .order("name");
-    const rawTables = (tbls ?? []) as Table[];
-
-    const { data: guestCounts } = await supabase
-      .from("guests")
-      .select("table_id")
-      .eq("event_id", eventId);
-    const countMap: Record<string, number> = {};
-    for (const g of (guestCounts ?? []) as { table_id: string | null }[]) {
-      if (g.table_id) countMap[g.table_id] = (countMap[g.table_id] ?? 0) + 1;
-    }
-
-    const { data: zns } = await supabase
-      .from("zones")
-      .select("*")
-      .eq("event_id", eventId)
-      .order("name");
-
+    const result = await loadData(eventId);
     setTables(
-      rawTables.map((t) => ({
+      result.rawTables.map((t) => ({
         ...t,
-        guest_count: countMap[t.id] ?? 0,
+        guest_count: result.personMap[t.id] ?? 0,
       }))
     );
-    setZones(zns ?? []);
+    setZones(result.zones);
+    setTableCounts(result.personMap);
+    setCanManage(result.canWrite);
   };
 
   // Ouvre le modal pour créer ou éditer une table
@@ -482,6 +515,23 @@ useEffect(() => {
                       </div>
                     </div>
 
+                    {/* Saisie directe des invités de la table (masquée si la
+                        table est verrouillée : aucun invité ne peut y être
+                        ajouté) */}
+                    {canManage && !table.is_locked && (
+                      <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full gap-1.5 text-gold border-gold/30 hover:bg-gold/5"
+                          onClick={() => setAddGuestsTableId(table.id)}
+                        >
+                          <UserPlus className="size-3.5" />
+                          Ajouter des invités
+                        </Button>
+                      </motion.div>
+                    )}
+
                     {/* Actions */}
                     <div className="flex gap-2">
                       <motion.div whileHover={prefersReducedMotion ? {} : { scale: 1.03 }} whileTap={prefersReducedMotion ? {} : { scale: 0.97 }} className="flex-1">
@@ -654,6 +704,20 @@ useEffect(() => {
           </motion.div>
         </DialogContent>
       </Dialog>
+
+      {/* Modal d'ajout rapide d'invités pour une table : les invités saisis
+          sont automatiquement attribués à la table sélectionnée */}
+      <BulkAddModal
+        open={addGuestsTableId !== null}
+        onOpenChange={(open) => {
+          if (!open) setAddGuestsTableId(null);
+        }}
+        eventId={eventId}
+        tables={tables}
+        tableCounts={tableCounts}
+        defaultTableId={addGuestsTableId ?? undefined}
+        onSuccess={refreshData}
+      />
     </main>
   );
 }
